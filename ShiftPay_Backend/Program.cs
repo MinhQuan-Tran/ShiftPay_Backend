@@ -53,7 +53,10 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
-app.MapOpenApi().AllowAnonymous();
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
 
 app.UseHttpsRedirection();
 
