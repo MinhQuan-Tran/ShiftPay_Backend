@@ -7,8 +7,12 @@ using ShiftPay_Backend.Data;
 var builder = WebApplication.CreateBuilder(args);
 
 // Key Vault
-var keyVaultEndpoint = new Uri(Environment.GetEnvironmentVariable("KeyVaultUri")!);
-builder.Configuration.AddAzureKeyVault(keyVaultEndpoint, new DefaultAzureCredential());
+var keyVaultUriString = Environment.GetEnvironmentVariable("KeyVaultUri");
+if (!string.IsNullOrEmpty(keyVaultUriString))
+{
+    var keyVaultEndpoint = new Uri(keyVaultUriString);
+    builder.Configuration.AddAzureKeyVault(keyVaultEndpoint, new DefaultAzureCredential());
+}
 
 // Cosmos DB
 builder.Services.AddDbContext<ShiftPay_BackendContext>(options =>
