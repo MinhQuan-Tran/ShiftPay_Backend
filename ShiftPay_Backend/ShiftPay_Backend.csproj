@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>734a0afd-d5c0-465f-bc21-56a8ff0c4daa</UserSecretsId>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.4.0" />
+    <PackageReference Include="Azure.Identity" Version="1.13.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.3" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.48.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Cosmos" Version="9.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.3">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Identity.Web" Version="3.8.2" />
+    <PackageReference Include="Microsoft.Identity.Web.UI" Version="3.8.2" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.2" />
+    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ShiftPay_Backend.ServiceDefaults\ShiftPay_Backend.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

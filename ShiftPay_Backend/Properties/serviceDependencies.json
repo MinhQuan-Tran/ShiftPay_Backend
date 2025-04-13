@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "cosmosdb1": {
+      "type": "cosmosdb",
+      "connectionId": "ConnectionStrings:ShiftPay_BackendContext"
+    },
+    "secrets1": {
+      "type": "secrets",
+      "connectionId": "KeyVaultUri"
+    },
+    "identityapp1": {
+      "type": "identityapp"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35825.156
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShiftPay_Backend", "ShiftPay_Backend\ShiftPay_Backend.csproj", "{79713BCD-7D28-3AEB-D246-9CECB048443F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShiftPay_Backend.AppHost", "ShiftPay_Backend.AppHost\ShiftPay_Backend.AppHost.csproj", "{C1DE6669-D1E6-4D8F-9202-B5B5350F72EF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShiftPay_Backend.ServiceDefaults", "ShiftPay_Backend.ServiceDefaults\ShiftPay_Backend.ServiceDefaults.csproj", "{EAD5C374-B298-87B8-F001-8B87B8029531}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShiftPay_Backend.Tests", "ShiftPay_Backend.Tests\ShiftPay_Backend.Tests.csproj", "{5BCC8F12-7602-4DEB-8CB0-7D0FB97DBBF9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{79713BCD-7D28-3AEB-D246-9CECB048443F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{79713BCD-7D28-3AEB-D246-9CECB048443F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{79713BCD-7D28-3AEB-D246-9CECB048443F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{79713BCD-7D28-3AEB-D246-9CECB048443F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1DE6669-D1E6-4D8F-9202-B5B5350F72EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1DE6669-D1E6-4D8F-9202-B5B5350F72EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1DE6669-D1E6-4D8F-9202-B5B5350F72EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1DE6669-D1E6-4D8F-9202-B5B5350F72EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EAD5C374-B298-87B8-F001-8B87B8029531}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EAD5C374-B298-87B8-F001-8B87B8029531}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EAD5C374-B298-87B8-F001-8B87B8029531}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EAD5C374-B298-87B8-F001-8B87B8029531}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5BCC8F12-7602-4DEB-8CB0-7D0FB97DBBF9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5BCC8F12-7602-4DEB-8CB0-7D0FB97DBBF9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5BCC8F12-7602-4DEB-8CB0-7D0FB97DBBF9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5BCC8F12-7602-4DEB-8CB0-7D0FB97DBBF9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A46A0D72-9E87-483B-8075-46F65FC3B9FD}
+	EndGlobalSection
+EndGlobal

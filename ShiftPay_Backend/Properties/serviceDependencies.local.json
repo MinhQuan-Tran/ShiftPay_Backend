@@ -1,0 +1,20 @@
+{
+  "dependencies": {
+    "cosmosdb1": {
+      "type": "cosmosdb.azure",
+      "connectionId": "ConnectionStrings:ShiftPay_BackendContext"
+    },
+    "secrets1": {
+      "secretStore": null,
+      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.KeyVault/vaults/shiftpay-key-vault",
+      "type": "secrets.keyVault",
+      "connectionId": "KeyVaultUri"
+    },
+    "identityapp1": {
+      "connectionInfo": "App registration: ShiftPay, Tenant: ShiftPay (shiftpay.onmicrosoft.com - AAD B2C)",
+      "secretStore": null,
+      "resourceId": null,
+      "type": "identityapp.default"
+    }
+  }
+}
