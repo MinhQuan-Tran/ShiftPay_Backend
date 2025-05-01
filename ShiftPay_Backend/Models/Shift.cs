@@ -20,19 +20,47 @@ namespace ShiftPay_Backend.Models
 
         public required decimal PayRate { get; set; }
 
-        private DateTime _from;
-        public required DateTime From
+        private DateTime _startTime;
+        public required DateTime StartTime
         {
-            get => _from;
+            get => _startTime;
             set
             {
-                _from = value;
-                YearMonth = _from.ToString("yyyy-MM"); // Auto-set YearMonth
-                Day = _from.Day;                       // Auto-set Day
+                if (value == default)
+                {
+                    throw new ArgumentException("StartTime cannot be default value.");
+                }
+
+                if (EndTime != default && value > EndTime)
+                {
+                    throw new ArgumentException($"StartTime cannot be greater than EndTime. value: {value}. EndTime: {EndTime}");
+                }
+
+                _startTime = value;
+                YearMonth = _startTime.ToString("yyyy-MM"); // Auto-set YearMonth
+                Day = _startTime.Day;                       // Auto-set Day
             }
         }
 
-        public required DateTime To { get; set; }
+        private DateTime _endTime;
+        public required DateTime EndTime
+        {
+            get => _endTime;
+            set
+            {
+                if (value == default)
+                {
+                    throw new ArgumentException("EndTime cannot be default value.");
+                }
+
+                if (StartTime != default && value < StartTime)
+                {
+                    throw new ArgumentException("EndTime cannot be less than StartTime.");
+                }
+
+                _endTime = value;
+            }
+        }
 
         public List<TimeSpan> UnpaidBreaks { get; set; } = new List<TimeSpan>();
 
@@ -41,26 +69,35 @@ namespace ShiftPay_Backend.Models
             return new ShiftDTO
             {
                 Id = Id,
-                YearMonth = YearMonth,
-                Day = Day,
                 Workplace = Workplace,
                 PayRate = PayRate,
-                From = From,
-                To = To,
-                UnpaidBreaks = UnpaidBreaks
+                StartTime = StartTime,
+                EndTime = EndTime,
+                UnpaidBreaks = UnpaidBreaks ?? new List<TimeSpan>()
+            };
+        }
+
+        public static Shift FromDTO(ShiftDTO dto)
+        {
+            return new Shift
+            {
+                Id = dto.Id ?? Guid.NewGuid().ToString(),
+                Workplace = dto.Workplace,
+                PayRate = dto.PayRate,
+                StartTime = dto.StartTime,
+                EndTime = dto.EndTime,
+                UnpaidBreaks = dto.UnpaidBreaks ?? new List<TimeSpan>()
             };
         }
     }
 
     public class ShiftDTO
     {
-        public required string Id { get; set; }
-        public required string YearMonth { get; set; }
-        public required int Day { get; set; }
+        public string? Id { get; set; }
         public required string Workplace { get; set; }
         public required decimal PayRate { get; set; }
-        public required DateTime From { get; set; }
-        public required DateTime To { get; set; }
+        public required DateTime StartTime { get; set; }
+        public required DateTime EndTime { get; set; }
         public required List<TimeSpan> UnpaidBreaks { get; set; }
     }
 }

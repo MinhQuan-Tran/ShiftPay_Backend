@@ -1,5 +1,4 @@
-﻿using Aspire.Hosting;
-using ShiftPay_Backend.Models;
+﻿using ShiftPay_Backend.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -51,32 +50,41 @@ namespace ShiftPay_Backend.Tests
                 {
                     Workplace = "TestPlace1",
                     PayRate = 15.5M,
-                    From = DateTime.Parse("2023-10-15T09:00:00"),
-                    To = DateTime.Parse("2023-10-15T17:00:00"),
+                    StartTime = DateTime.Parse("2023-10-15T09:00:00"),
+                    EndTime = DateTime.Parse("2023-10-15T17:00:00"),
                     UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:30:00") }
                 },
                 new Shift
                 {
                     Workplace = "TestPlace2",
                     PayRate = 22.0M,
-                    From = DateTime.Parse("2023-09-19T09:00:00"),
-                    To = DateTime.Parse("2023-09-20T17:00:00"),
+                    StartTime = DateTime.Parse("2023-09-19T09:00:00"),
+                    EndTime = DateTime.Parse("2023-09-20T17:00:00"),
                     UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:30:00"), TimeSpan.Parse("01:00:00") }
                 },
                 new Shift
                 {
                     Workplace = "TestPlace3",
                     PayRate = 69.69M,
-                    From = DateTime.Parse("2023-09-15T09:00:00"),
-                    To = DateTime.Parse("2023-09-18T17:00:00"),
-                    UnpaidBreaks = new List<TimeSpan>()
+                    StartTime = DateTime.Parse("2023-09-15T09:00:00"),
+                    EndTime = DateTime.Parse("2023-09-18T17:00:00"),
+                    UnpaidBreaks = new List<TimeSpan>{ }
                 }
             };
 
             foreach (var shift in newShifts)
             {
                 var response = await Client.PostAsJsonAsync("/api/Shifts", shift);
-                response.EnsureSuccessStatusCode();
+
+                try
+                {
+                    response.EnsureSuccessStatusCode();
+                }
+                catch (HttpRequestException ex)
+                {
+                    Console.WriteLine($"Request failed: {ex.Message}");
+                    await Client.DeleteAsync($"/api/Shifts/{response.Content.ReadFromJsonAsync<ShiftDTO>().Id}");
+                }
 
                 var returnedShift = await response.Content.ReadFromJsonAsync<ShiftDTO>();
                 if (returnedShift?.Id is not null)

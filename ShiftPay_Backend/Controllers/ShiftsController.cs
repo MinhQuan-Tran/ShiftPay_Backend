@@ -44,12 +44,10 @@ namespace ShiftPay_Backend.Controllers
             return Ok(shifts.Select(shift => shift.ToDTO()));
         }
 
-        // GET: api/Shifts/5
+        // GET: api/Shifts/abc-123
         [HttpGet("{id}")]
         public async Task<ActionResult<ShiftDTO>> GetShift(string id)
         {
-            Console.WriteLine($"Shift #{id}");
-
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
             if (string.IsNullOrEmpty(userId))
@@ -62,13 +60,13 @@ namespace ShiftPay_Backend.Controllers
                 .Select(shift => shift.ToDTO())
                 .FirstOrDefaultAsync();
 
-            return shift != null ? Ok(shift) : NotFound();
+            return shift != null ? Ok(shift) : NotFound("No matching shift found.");
         }
 
         // PUT: api/Shifts/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // EndTime protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutShift(string id, Shift shift)
+        public async Task<ActionResult<ShiftDTO>> PutShift(string id, ShiftDTO recievedShiftDTO)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
@@ -84,30 +82,34 @@ namespace ShiftPay_Backend.Controllers
 
             if (existingShift is null)
             {
-                return NotFound();
+                return NotFound("No matching shift found.");
             }
+
+            var shift = Shift.FromDTO(recievedShiftDTO);
 
             var partitionChanged = existingShift.YearMonth != shift.YearMonth || existingShift.Day != shift.Day;
             if (partitionChanged)
             {
-                _context.Shifts.Remove(existingShift);
+                // If the partition key has changed, create a new shift in the new partition
                 _context.Shifts.Add(new Shift
                 {
                     Id = id,
                     UserId = userId,
                     Workplace = shift.Workplace,
                     PayRate = shift.PayRate,
-                    From = shift.From,
-                    To = shift.To,
+                    StartTime = shift.StartTime,
+                    EndTime = shift.EndTime,
                     UnpaidBreaks = shift.UnpaidBreaks
                 });
+
+                _context.Shifts.Remove(existingShift);
             }
             else
             {
                 existingShift.Workplace = shift.Workplace;
                 existingShift.PayRate = shift.PayRate;
-                existingShift.From = shift.From;
-                existingShift.To = shift.To;
+                existingShift.StartTime = shift.StartTime;
+                existingShift.EndTime = shift.EndTime;
                 existingShift.UnpaidBreaks = shift.UnpaidBreaks;
 
                 _context.Shifts.Update(existingShift);
@@ -120,13 +122,25 @@ namespace ShiftPay_Backend.Controllers
                 .Select(s => s.ToDTO())
                 .FirstOrDefaultAsync();
 
-            return Ok(updatedShift);
+            if (updatedShift is null)
+            {
+                return NotFound("Something went wrong. Updated shift not found.");
+            }
+
+            var shiftResponse = updatedShift.GetType()
+             .GetProperties()
+             .ToDictionary(prop => prop.Name, prop => prop.GetValue(shift.ToDTO()));
+
+            shiftResponse["Id"] = id; // Change to server-generated ID
+            shiftResponse["RecievedId"] = recievedShiftDTO.Id;
+
+            return Ok(shiftResponse);
         }
 
         // POST: api/Shifts
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // EndTime protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Shift>> PostShift(Shift shift)
+        public async Task<ActionResult<ShiftDTO>> PostShift(ShiftDTO recievedShiftDTO)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
@@ -134,7 +148,10 @@ namespace ShiftPay_Backend.Controllers
             {
                 return Unauthorized("User ID is missing.");
             }
-            shift.UserId = userId;
+
+            var shift = Shift.FromDTO(recievedShiftDTO);
+            shift.Id = Guid.NewGuid().ToString(); // Generate a new ID for the shift
+            shift.UserId = userId; // Set the UserId to the current user's ID
 
             _context.Shifts.Add(shift);
 
@@ -154,7 +171,14 @@ namespace ShiftPay_Backend.Controllers
                 }
             }
 
-            return CreatedAtAction("GetShift", new { id = shift.Id }, shift.ToDTO());
+            var shiftResponse = shift.ToDTO()
+                .GetType()
+                .GetProperties()
+                .ToDictionary(prop => prop.Name, prop => prop.GetValue(shift.ToDTO()));
+
+            shiftResponse["RecievedId"] = recievedShiftDTO.Id;
+
+            return CreatedAtAction("GetShift", new { id = shift.Id }, shiftResponse);
         }
 
         // DELETE: api/Shifts/5
@@ -172,7 +196,7 @@ namespace ShiftPay_Backend.Controllers
 
             if (shift is null)
             {
-                return NotFound();
+                return NotFound("No matching shift found.");
             }
 
             _context.Shifts.Remove(shift);

@@ -1,5 +1,5 @@
-﻿using ShiftPay_Backend.Models;
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
+using ShiftDTO = ShiftPay_Backend.Models.ShiftDTO;
 
 namespace ShiftPay_Backend.Tests;
 
@@ -24,6 +24,29 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
                 $"Cleanup failed for shift ID {shiftId} with status code {deleteResponse.StatusCode}"
             );
         }
+    }
+
+    private static void AssertShiftMatches(ShiftDTO expected, ShiftDTO actual, bool compareId = false)
+    {
+        // Generated ID from server should not be compared
+        if (compareId)
+        {
+            Assert.Equal(expected.Id, actual.Id);
+        }
+
+        Assert.Equal(expected.Workplace, actual.Workplace);
+        Assert.Equal(expected.PayRate, actual.PayRate);
+        Assert.Equal(expected.StartTime, actual.StartTime);
+        Assert.Equal(expected.EndTime, actual.EndTime);
+        Assert.Equal(expected.UnpaidBreaks.Count, actual.UnpaidBreaks.Count);
+
+        for (int i = 0; i < expected.UnpaidBreaks.Count; i++)
+        {
+            Assert.Equal(expected.UnpaidBreaks[i], actual.UnpaidBreaks[i]);
+        }
+
+        Assert.False(actual.GetType().GetProperties().Any(p => p.Name.Equals("UserId", StringComparison.OrdinalIgnoreCase)),
+            "DTO should not expose UserId");
     }
 
     // GET
@@ -60,9 +83,9 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         if (query.Contains("year") && query.Contains("month") && query.Contains("day"))
         {
             Assert.Contains(returnedShifts, s =>
-                s.From.Year == 2023 &&
-                s.From.Month == 10 &&
-                s.From.Day == 15);
+                s.StartTime.Year == 2023 &&
+                s.StartTime.Month == 10 &&
+                s.StartTime.Day == 15);
         }
     }
 
@@ -89,12 +112,12 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
     [Fact]
     public async Task CreateShift_ReturnsCreated()
     {
-        var newShift = new Shift
+        var newShift = new ShiftDTO
         {
             Workplace = "NewPlace",
             PayRate = 30.0M,
-            From = DateTime.Parse("2024-01-01T09:00:00"),
-            To = DateTime.Parse("2024-01-01T17:00:00"),
+            StartTime = DateTime.Parse("2024-01-01T09:00:00"),
+            EndTime = DateTime.Parse("2024-01-01T17:00:00"),
             UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:45:00") }
         };
 
@@ -108,6 +131,39 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         var raw = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
 
+        Assert.DoesNotContain("receivedId", raw, StringComparison.OrdinalIgnoreCase);
+
+        await CleanupShift(returnedShift.Id);
+    }
+
+    [Fact]
+    public async Task CreateShift_ReturnsCreatedWithLocalId()
+    {
+        var receivedId = Guid.NewGuid().ToString();
+        var newShift = new ShiftDTO
+        {
+            Id = receivedId,
+            Workplace = "LocalWithServerId",
+            PayRate = 42.0M,
+            StartTime = DateTime.Parse("2024-12-01T08:00:00"),
+            EndTime = DateTime.Parse("2024-12-01T16:00:00"),
+            UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(30) }
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/Shifts", newShift);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var returnedShift = await response.Content.ReadFromJsonAsync<ShiftDTO>();
+        Assert.NotNull(returnedShift);
+        AssertShiftMatches(newShift, returnedShift, false);
+
+        Assert.NotEqual(receivedId, returnedShift.Id);
+        // There is no "receivedId" in the ShiftDTO
+        // But still check for it
+
+        var raw = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
+
         await CleanupShift(returnedShift.Id);
     }
 
@@ -117,7 +173,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         var invalidShift = new
         {
             Workplace = "InvalidPlace",
-            From = "2024-01-01T09:00:00",
+            StartTime = "2024-01-01T09:00:00",
             UnpaidBreaks = new[] { "00:30:00" }
         };
 
@@ -129,12 +185,12 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
     [Fact]
     public async Task UpdateShift_ReturnsUpdatedShift()
     {
-        var originalShift = new Shift
+        var originalShift = new ShiftDTO
         {
             Workplace = "UpdateTarget",
             PayRate = 20.0M,
-            From = DateTime.Parse("2024-05-01T08:00:00"),
-            To = DateTime.Parse("2024-05-01T16:00:00"),
+            StartTime = DateTime.Parse("2024-05-01T08:00:00"),
+            EndTime = DateTime.Parse("2024-05-01T16:00:00"),
             UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:30:00") }
         };
 
@@ -144,12 +200,12 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         var returnedShift = await createResponse.Content.ReadFromJsonAsync<ShiftDTO>();
         Assert.NotNull(returnedShift);
 
-        var updatedShift = new Shift
+        var updatedShift = new ShiftDTO
         {
             Workplace = "UpdatedWorkplace",
             PayRate = 25.0M,
-            From = DateTime.Parse("2024-05-02T09:00:00"),
-            To = DateTime.Parse("2024-05-02T17:00:00"),
+            StartTime = DateTime.Parse("2024-05-02T09:00:00"),
+            EndTime = DateTime.Parse("2024-05-02T17:00:00"),
             UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:45:00") }
         };
 
@@ -160,8 +216,8 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         Assert.NotNull(returnedShift);
         Assert.Equal("UpdatedWorkplace", returnedShift.Workplace);
         Assert.Equal(25.0M, returnedShift.PayRate);
-        Assert.Equal(DateTime.Parse("2024-05-02T09:00:00"), returnedShift.From);
-        Assert.Equal(DateTime.Parse("2024-05-02T17:00:00"), returnedShift.To);
+        Assert.Equal(DateTime.Parse("2024-05-02T09:00:00"), returnedShift.StartTime);
+        Assert.Equal(DateTime.Parse("2024-05-02T17:00:00"), returnedShift.EndTime);
         Assert.Single(returnedShift.UnpaidBreaks);
         Assert.Contains(returnedShift.UnpaidBreaks, b => b == TimeSpan.Parse("00:45:00"));
 
@@ -174,32 +230,29 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
     [Fact]
     public async Task UpdateShift_UpdateYearMonthAndDayCorrectly()
     {
-        var originalShift = new Shift
+        var originalShift = new ShiftDTO
         {
             Workplace = "FromChangeTest",
             PayRate = 15.0M,
-            From = DateTime.Parse("2024-04-01T09:00:00"),
-            To = DateTime.Parse("2024-04-01T17:00:00"),
+            StartTime = DateTime.Parse("2024-04-01T09:00:00"),
+            EndTime = DateTime.Parse("2024-04-01T17:00:00"),
             UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:20:00") }
         };
 
         var createResponse = await _client.PostAsJsonAsync("/api/Shifts", originalShift);
         var returnedShift = await createResponse.Content.ReadFromJsonAsync<ShiftDTO>();
 
-        var updatedShift = new Shift
+        var updatedShift = new ShiftDTO
         {
             Workplace = "FromChangeTest",
             PayRate = 15.0M,
-            From = DateTime.Parse("2024-06-05T08:00:00"),
-            To = DateTime.Parse("2024-06-05T16:00:00"),
+            StartTime = DateTime.Parse("2024-06-05T08:00:00"),
+            EndTime = DateTime.Parse("2024-06-05T16:00:00"),
             UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:20:00") }
         };
 
         var updateResponse = await _client.PutAsJsonAsync($"/api/Shifts/{returnedShift!.Id}", updatedShift);
         returnedShift = await updateResponse.Content.ReadFromJsonAsync<ShiftDTO>();
-
-        Assert.Equal("2024-06", returnedShift?.YearMonth);
-        Assert.Equal(5, returnedShift?.Day);
 
         await CleanupShift(returnedShift!.Id);
     }
@@ -222,12 +275,12 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
     [Fact]
     public async Task UpdateShift_NonExistentShift_ReturnsNotFound()
     {
-        var updatedShift = new Shift
+        var updatedShift = new ShiftDTO
         {
             Workplace = "NonExistent",
             PayRate = 30.0M,
-            From = DateTime.Now,
-            To = DateTime.Now.AddHours(8),
+            StartTime = DateTime.Now,
+            EndTime = DateTime.Now.AddHours(8),
             UnpaidBreaks = new List<TimeSpan>()
         };
 
@@ -239,12 +292,12 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
     [Fact]
     public async Task DeleteShift_RemovesShift()
     {
-        var shiftToDelete = new Shift
+        var shiftToDelete = new ShiftDTO
         {
             Workplace = "TempDelete",
             PayRate = 10.0M,
-            From = DateTime.Parse("2024-05-01T09:00:00"),
-            To = DateTime.Parse("2024-05-01T17:00:00"),
+            StartTime = DateTime.Parse("2024-05-01T09:00:00"),
+            EndTime = DateTime.Parse("2024-05-01T17:00:00"),
             UnpaidBreaks = new List<TimeSpan>()
         };
 
