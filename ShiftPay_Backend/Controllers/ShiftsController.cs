@@ -26,7 +26,6 @@ namespace ShiftPay_Backend.Controllers
         public async Task<ActionResult<IEnumerable<ShiftDTO>>> GetShifts(int? year, int? month, int? day)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized("User ID is missing.");
@@ -131,8 +130,10 @@ namespace ShiftPay_Backend.Controllers
              .GetProperties()
              .ToDictionary(prop => prop.Name, prop => prop.GetValue(shift.ToDTO()));
 
-            shiftResponse["Id"] = id; // Change to server-generated ID
-            shiftResponse["RecievedId"] = recievedShiftDTO.Id;
+            if (recievedShiftDTO.Id != null)
+            {
+                shiftResponse["RecievedId"] = recievedShiftDTO.Id;
+            }
 
             return Ok(shiftResponse);
         }
@@ -176,7 +177,10 @@ namespace ShiftPay_Backend.Controllers
                 .GetProperties()
                 .ToDictionary(prop => prop.Name, prop => prop.GetValue(shift.ToDTO()));
 
-            shiftResponse["RecievedId"] = recievedShiftDTO.Id;
+            if (recievedShiftDTO.Id != null)
+            {
+                shiftResponse["RecievedId"] = recievedShiftDTO.Id;
+            }
 
             return CreatedAtAction("GetShift", new { id = shift.Id }, shiftResponse);
         }

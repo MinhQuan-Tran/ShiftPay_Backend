@@ -1,17 +1,27 @@
 using Azure.Identity;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
+using ShiftPay_Backend.Auth;
 using ShiftPay_Backend.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Key Vault
-var keyVaultUriString = Environment.GetEnvironmentVariable("KeyVaultUri");
-if (!string.IsNullOrEmpty(keyVaultUriString))
+// Support environment-based config
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
+
+if (builder.Environment.EnvironmentName != "Test")
 {
-    var keyVaultEndpoint = new Uri(keyVaultUriString);
-    builder.Configuration.AddAzureKeyVault(keyVaultEndpoint, new DefaultAzureCredential());
+    // Key Vault
+    var keyVaultUriString = Environment.GetEnvironmentVariable("KeyVaultUri");
+    if (!string.IsNullOrEmpty(keyVaultUriString))
+    {
+        var keyVaultEndpoint = new Uri(keyVaultUriString);
+        builder.Configuration.AddAzureKeyVault(keyVaultEndpoint, new DefaultAzureCredential());
+    }
 }
 
 // Cosmos DB
@@ -27,7 +37,20 @@ builder.Services.AddDbContext<ShiftPay_BackendContext>(options =>
 
 builder.AddServiceDefaults();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+var useFakeAuth = builder.Configuration.GetValue<bool>("Authentication:UseFake");
+
+if (useFakeAuth)
+{
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = "FakeAuth";
+        options.DefaultChallengeScheme = "FakeAuth";
+    })
+    .AddScheme<AuthenticationSchemeOptions, FakeAuthHandler>("FakeAuth", _ => { });
+}
+else
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApi(
         options =>
         {
@@ -40,6 +63,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             options.TokenValidationParameters.NameClaimType = "name";
         }
     );
+}
+builder.Services.AddAuthorization();
 
 builder.Services.AddLogging(logging =>
 {

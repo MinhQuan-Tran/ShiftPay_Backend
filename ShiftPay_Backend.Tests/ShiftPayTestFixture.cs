@@ -1,117 +1,146 @@
-﻿using ShiftPay_Backend.Models;
-using System.IdentityModel.Tokens.Jwt;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using ShiftPay_Backend.Data;
+using ShiftPay_Backend.Models;
+using ShiftDTO = ShiftPay_Backend.Models.ShiftDTO;
 
-namespace ShiftPay_Backend.Tests
+namespace ShiftPay_Backend.Tests;
+
+public class ShiftPayTestFixture : IAsyncLifetime
 {
-    public class ShiftPayTestFixture : IAsyncLifetime
+    public HttpClient Client { get; private set; } = null!;
+    public List<ShiftDTO> TestDataShifts { get; } = new();
+
+    private DistributedApplication _app = null!;
+    private ShiftPay_BackendContext _context = null!;
+
+    public async Task InitializeAsync()
     {
-        public string Token { get; private set; } = null!;
-        public HttpClient Client { get; private set; } = null!;
-        public List<ShiftDTO> TestDataShifts { get; } = new();
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
 
-        private DistributedApplication _app;
-        private AuthenticationService _authService;
+        var appHost = DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.ShiftPay_Backend_AppHost>(["DcpPublisher:RandomizePorts=false"])
+            .GetAwaiter()
+            .GetResult();
 
-        public async Task InitializeAsync()
+        _app = await appHost.BuildAsync();
+        await _app.StartAsync();
+
+        var services = new ServiceCollection();
+
+        // Create a configuration object
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile("appsettings.Test.json", optional: false, reloadOnChange: true)
+            .Build();
+
+        // Register IConfiguration
+        services.AddSingleton<IConfiguration>(configuration);
+
+        // Register DbContext
+        services.AddDbContext<ShiftPay_BackendContext>(options =>
+            options.UseCosmos(
+                configuration["Cosmos:Endpoint"],
+                configuration["Cosmos:Key"],
+                configuration["Cosmos:DatabaseName"]
+            ));
+
+        var provider = services.BuildServiceProvider();
+        _context = provider.GetRequiredService<ShiftPay_BackendContext>();
+
+        await SeedTestDataAsync();
+
+        Client = _app.CreateHttpClient("shiftpay-backend", "https");
+    }
+
+    public async Task ClearAllShiftsAsync()
+    {
+        var allShifts = await _context.Shifts.ToListAsync();
+        _context.Shifts.RemoveRange(allShifts);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task SeedTestDataAsync()
+    {
+        await ClearAllShiftsAsync();
+
+        // Add test data with distinct StartTime values for filtering and unpaid breaks
+        var testShifts = new List<Shift>
         {
-            _authService = new AuthenticationService();
-
-            Token = await _authService.GetAccessToken();
-            var handler = new JwtSecurityTokenHandler();
-            var jsonToken = handler.ReadToken(Token) as JwtSecurityToken;
-            var userId = jsonToken?.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
-
-            var appHost = DistributedApplicationTestingBuilder
-                .CreateAsync<Projects.ShiftPay_Backend_AppHost>(["DcpPublisher:RandomizePorts=false"])
-                .GetAwaiter()
-                .GetResult();
-
-            appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
+            new Shift
             {
-                clientBuilder.AddStandardResilienceHandler();
-            });
-
-            _app = appHost.BuildAsync().GetAwaiter().GetResult();
-            var resourceNotificationService = _app.Services.GetRequiredService<ResourceNotificationService>();
-            await _app.StartAsync();
-
-            Client = _app.CreateHttpClient("shiftpay-backend", "https");
-            Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-
-            await resourceNotificationService
-                .WaitForResourceAsync("shiftpay-backend", KnownResourceStates.Running)
-                .WaitAsync(TimeSpan.FromSeconds(30));
-
-            var newShifts = new[]
+                Id = "s1",
+                UserId = "test-user-id",
+                Workplace = "McDonald",
+                PayRate = 25,
+                StartTime = new DateTime(2023, 10, 15, 9, 0, 0, DateTimeKind.Utc), // Matches year=2023, month=10, day=15
+                EndTime = new DateTime(2023, 10, 15, 17, 0, 0, DateTimeKind.Utc),
+                // Add unpaid breaks
+                UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(30) }
+            },
+            new Shift
             {
-                new Shift
-                {
-                    Workplace = "TestPlace1",
-                    PayRate = 15.5M,
-                    StartTime = DateTime.Parse("2023-10-15T09:00:00"),
-                    EndTime = DateTime.Parse("2023-10-15T17:00:00"),
-                    UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:30:00") }
-                },
-                new Shift
-                {
-                    Workplace = "TestPlace2",
-                    PayRate = 22.0M,
-                    StartTime = DateTime.Parse("2023-09-19T09:00:00"),
-                    EndTime = DateTime.Parse("2023-09-20T17:00:00"),
-                    UnpaidBreaks = new List<TimeSpan> { TimeSpan.Parse("00:30:00"), TimeSpan.Parse("01:00:00") }
-                },
-                new Shift
-                {
-                    Workplace = "TestPlace3",
-                    PayRate = 69.69M,
-                    StartTime = DateTime.Parse("2023-09-15T09:00:00"),
-                    EndTime = DateTime.Parse("2023-09-18T17:00:00"),
-                    UnpaidBreaks = new List<TimeSpan>{ }
-                }
-            };
-
-            foreach (var shift in newShifts)
+                Id = "s2",
+                UserId = "test-user-id",
+                Workplace = "KFC",
+                PayRate = 30,
+                StartTime = new DateTime(2023, 10, 14, 8, 0, 0, DateTimeKind.Utc), // Matches year=2023, month=10
+                EndTime = new DateTime(2023, 10, 14, 16, 0, 0, DateTimeKind.Utc),
+                // Add unpaid breaks
+                UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(20) }
+            },
+            new Shift
             {
-                var response = await Client.PostAsJsonAsync("/api/Shifts", shift);
+                Id = "s3",
+                UserId = "test-user-id",
+                Workplace = "Starbucks",
+                PayRate = 28,
+                StartTime = new DateTime(2023, 9, 15, 7, 0, 0, DateTimeKind.Utc), // Matches year=2023
+                EndTime = new DateTime(2023, 9, 15, 15, 0, 0, DateTimeKind.Utc),
+                // No unpaid breaks
+                UnpaidBreaks = new List<TimeSpan>()
+            },
+            new Shift
+            {
+                Id = "s4",
+                UserId = "test-user-id",
+                Workplace = "Burger King",
+                PayRate = 20,
+                StartTime = new DateTime(2022, 12, 25, 10, 0, 0, DateTimeKind.Utc), // Does not match any filter
+                EndTime = new DateTime(2022, 12, 25, 18, 0, 0, DateTimeKind.Utc),
+                // Add unpaid breaks
+                UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(45) }
+            },
+            new Shift
+            {
+                Id = "s5",
+                UserId = "test-user-id-1", // Different user ID
+                Workplace = "Starbucks",
+                PayRate = 28,
+                StartTime = new DateTime(2023, 9, 15, 7, 0, 0, DateTimeKind.Utc), // Matches year=2023
+                EndTime = new DateTime(2023, 9, 15, 15, 0, 0, DateTimeKind.Utc),
+                // No unpaid breaks
+                UnpaidBreaks = new List<TimeSpan>()
+            },
+        };
 
-                try
-                {
-                    response.EnsureSuccessStatusCode();
-                }
-                catch (HttpRequestException ex)
-                {
-                    Console.WriteLine($"Request failed: {ex.Message}");
-                    await Client.DeleteAsync($"/api/Shifts/{response.Content.ReadFromJsonAsync<ShiftDTO>().Id}");
-                }
+        _context.Shifts.AddRange(testShifts);
+        await _context.SaveChangesAsync();
 
-                var returnedShift = await response.Content.ReadFromJsonAsync<ShiftDTO>();
-                if (returnedShift?.Id is not null)
-                {
-                    TestDataShifts.Add(returnedShift);
-                }
-            }
-        }
-
-        public async Task DisposeAsync()
+        // Update TestDataShifts for use in tests
+        this.TestDataShifts.Clear();
+        this.TestDataShifts.AddRange(testShifts.Select(s => new ShiftDTO
         {
-            foreach (var shift in TestDataShifts)
-            {
-                try
-                {
-                    var response = await Client.DeleteAsync($"/api/Shifts/{shift.Id}");
+            Id = s.Id,
+            Workplace = s.Workplace,
+            PayRate = s.PayRate,
+            StartTime = s.StartTime,
+            EndTime = s.EndTime,
+            UnpaidBreaks = s.UnpaidBreaks
+        }));
+    }
 
-                    if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NotFound)
-                    {
-                        Console.WriteLine($"Failed to delete shift {shift.Id}: {response.StatusCode}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Exception while deleting shift {shift.Id}: {ex.Message}");
-                }
-            }
-        }
+    public Task DisposeAsync()
+    {
+        return _app.DisposeAsync().AsTask();
     }
 }

@@ -16,8 +16,8 @@ namespace ShiftPay_Backend.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Shift>()
-                .ToContainer("Shifts")  // Your container name
-                .HasPartitionKey(e => new { e.UserId, e.YearMonth, e.Day }); // Define hierarchical partition keys
+                .ToContainer("Shifts")
+                .HasPartitionKey(e => new { e.UserId, e.YearMonth, e.Day });
         }
 
         public DbSet<Shift> Shifts { get; set; } = default!;
