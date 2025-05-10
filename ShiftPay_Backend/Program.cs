@@ -12,7 +12,7 @@ Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
 // Support environment-based config
 builder.Configuration
-    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile("appsettings.json", optional: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
 
 if (builder.Environment.EnvironmentName != "Test")
