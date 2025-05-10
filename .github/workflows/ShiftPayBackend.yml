@@ -67,19 +67,6 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Wait for OpenAPI to be live
-        run: |
-          echo "Waiting for OpenAPI endpoint to be ready..."
-          for i in {1..10}; do
-            if curl --fail --silent "${{ env.AZURE_APIM_APPSERVICEURL }}/openapi/v1.json"; then
-              echo "OpenAPI spec is live."
-              break
-            else
-              echo "Retrying in 5 seconds..."
-              sleep 5
-            fi
-          done
-
       - name: Import API into Azure API Management
         run: |
           az apim api import \
