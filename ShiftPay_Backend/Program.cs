@@ -8,8 +8,6 @@ using ShiftPay_Backend.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-Directory.SetCurrentDirectory(AppContext.BaseDirectory);
-
 // Support environment-based config
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
