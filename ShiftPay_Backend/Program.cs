@@ -82,10 +82,7 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi(); // Runtime OpenAPI for dev
-}
+app.MapOpenApi();
 
 app.UseHttpsRedirection();
 
