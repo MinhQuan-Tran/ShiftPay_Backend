@@ -1,18 +1,24 @@
 {
   "dependencies": {
-    "cosmosdb1": {
-      "type": "cosmosdb",
-      "connectionId": "ConnectionStrings:ShiftPay_BackendContext"
-    },
     "secrets1": {
       "type": "secrets",
       "connectionId": "KeyVaultUri"
     },
-    "identityapp1": {
-      "type": "identityapp"
-    },
     "apis1": {
       "type": "apis"
+    },
+    "cosmosdb1": {
+      "type": "cosmosdb",
+      "connectionId": "ConnectionStrings:ShiftPay_BackendContext",
+      "dynamicId": null
+    },
+    "secrets2": {
+      "type": "secrets",
+      "connectionId": "VaultUri",
+      "dynamicId": null
+    },
+    "identityapp1": {
+      "type": "identityapp"
     }
   }
 }

@@ -46,7 +46,8 @@ if (useFakeAuth)
         options.DefaultAuthenticateScheme = "FakeAuth";
         options.DefaultChallengeScheme = "FakeAuth";
     })
-    .AddScheme<AuthenticationSchemeOptions, FakeAuthHandler>("FakeAuth", _ => { });
+    .AddScheme<AuthenticationSchemeOptions, FakeAuthHandler>("FakeAuth", _ => { })
+    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
 }
 else
 {
