@@ -21,9 +21,9 @@ namespace ShiftPay_Backend.Controllers
             _context = context;
         }
 
-        // GET: api/Shifts?year=2023&month=10&day=15
+        // GET: api/Shifts?year=2023&month=10&day=15&id=id1&id=id2&id=id3 (or ids=id1&ids=id2&ids=id3)
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ShiftDTO>>> GetShifts(int? year, int? month, int? day)
+        public async Task<ActionResult<IEnumerable<ShiftDTO>>> GetShifts(int? year, int? month, int? day, [FromQuery(Name = "id")] string[]? ids)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -33,7 +33,11 @@ namespace ShiftPay_Backend.Controllers
 
             var shifts = await _context.Shifts
                 .Where(s =>
+                    // User ID
                     s.UserId == userId &&
+                    // IDs
+                    (ids == null || !ids.Any() || ids.Contains(s.Id)) &&
+                    // Year, Month, Day
                     (!year.HasValue || s.YearMonth.StartsWith($"{year:D4}-")) &&
                     (!month.HasValue || s.YearMonth.EndsWith($"-{month:D2}")) &&
                     (!day.HasValue || s.Day == day)
@@ -48,7 +52,6 @@ namespace ShiftPay_Backend.Controllers
         public async Task<ActionResult<ShiftDTO>> GetShift(string id)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized("User ID is missing.");
@@ -62,13 +65,12 @@ namespace ShiftPay_Backend.Controllers
             return shift != null ? Ok(shift) : NotFound("No matching shift found.");
         }
 
+
         // PUT: api/Shifts/5
-        // EndTime protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
         public async Task<ActionResult<ShiftDTO>> PutShift(string id, ShiftDTO recievedShiftDTO)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized("User ID is missing.");
@@ -126,25 +128,15 @@ namespace ShiftPay_Backend.Controllers
                 return NotFound("Something went wrong. Updated shift not found.");
             }
 
-            var shiftResponse = updatedShift.GetType()
-             .GetProperties()
-             .ToDictionary(prop => prop.Name, prop => prop.GetValue(shift.ToDTO()));
-
-            if (recievedShiftDTO.Id != null)
-            {
-                shiftResponse["RecievedId"] = recievedShiftDTO.Id;
-            }
-
-            return Ok(shiftResponse);
+            return Ok(updatedShift);
         }
 
+
         // POST: api/Shifts
-        // EndTime protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
         public async Task<ActionResult<ShiftDTO>> PostShift(ShiftDTO recievedShiftDTO)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized("User ID is missing.");
@@ -172,25 +164,71 @@ namespace ShiftPay_Backend.Controllers
                 }
             }
 
-            var shiftResponse = shift.ToDTO()
-                .GetType()
-                .GetProperties()
-                .ToDictionary(prop => prop.Name, prop => prop.GetValue(shift.ToDTO()));
+            var updatedShift = await _context.Shifts
+                .Where(s => s.UserId == userId && s.Id == shift.Id)
+                .Select(s => s.ToDTO())
+                .FirstOrDefaultAsync();
 
-            if (recievedShiftDTO.Id != null)
+            if (updatedShift is null)
             {
-                shiftResponse["RecievedId"] = recievedShiftDTO.Id;
+                return NotFound("Something went wrong. Updated shift not found.");
             }
 
-            return CreatedAtAction("GetShift", new { id = shift.Id }, shiftResponse);
+            return CreatedAtAction("GetShift", new { id = updatedShift.Id }, updatedShift);
         }
+
+        // POST: api/Shifts/batch
+        [HttpPost("batch")]
+        public async Task<ActionResult<IEnumerable<ShiftDTO>>> PostShiftBatch(ShiftDTO[] recievedShiftDTOs)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User ID is missing.");
+            }
+
+            var shifts = recievedShiftDTOs.Select(shiftDTO =>
+            {
+                var shift = Shift.FromDTO(shiftDTO);
+                shift.Id = Guid.NewGuid().ToString(); // Generate a new ID for the shift
+                shift.UserId = userId; // Set the UserId to the current user's ID
+                return shift;
+            }).ToList();
+
+            _context.Shifts.AddRange(shifts);
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return Conflict();
+            }
+
+            var updatedShifts = await _context.Shifts
+                .Where(s => s.UserId == userId && shifts.Select(r => r.Id).Contains(s.Id))
+                .Select(s => s.ToDTO())
+                .ToListAsync();
+
+            if (updatedShifts is null || updatedShifts.Count != shifts.Count)
+            {
+                return NotFound("Something went wrong. Updated shifts not found.");
+            }
+
+            return CreatedAtAction(
+                "GetShifts",
+                new { id = updatedShifts.Select(s => s.Id).ToArray() },
+                updatedShifts
+            );
+        }
+
 
         // DELETE: api/Shifts/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteShift(string id)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized("User ID is missing.");
@@ -208,6 +246,7 @@ namespace ShiftPay_Backend.Controllers
 
             return NoContent();
         }
+
 
         private bool ShiftExists(string id, string userId)
         {

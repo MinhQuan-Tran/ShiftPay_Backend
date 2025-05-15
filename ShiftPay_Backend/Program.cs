@@ -13,9 +13,9 @@ builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
 
-if (builder.Environment.EnvironmentName != "Test")
+if (builder.Environment.IsProduction())
 {
-    // Key Vault
+    // Use KeyVault for DB Connection String
     var keyVaultUriString = Environment.GetEnvironmentVariable("KeyVaultUri");
     if (!string.IsNullOrEmpty(keyVaultUriString))
     {

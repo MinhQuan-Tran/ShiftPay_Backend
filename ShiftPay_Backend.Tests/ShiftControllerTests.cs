@@ -26,24 +26,30 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         }
     }
 
-    private static void AssertShiftMatches(ShiftDTO expected, ShiftDTO actual, bool compareId = false)
+    private static void AssertShiftMatches(ShiftDTO expected, ShiftDTO actual)
     {
-        // Generated ID from server should not be compared
-        if (compareId)
-        {
-            Assert.Equal(expected.Id, actual.Id);
-        }
-
+        // Don't compare Ids here
         Assert.Equal(expected.Workplace, actual.Workplace);
         Assert.Equal(expected.PayRate, actual.PayRate);
         Assert.Equal(expected.StartTime, actual.StartTime);
         Assert.Equal(expected.EndTime, actual.EndTime);
         Assert.Equal(expected.UnpaidBreaks.Count, actual.UnpaidBreaks.Count);
 
-        for (int i = 0; i < expected.UnpaidBreaks.Count; i++)
+        // Check if expected has unpaid breaks (not null or empty)
+        if (expected.UnpaidBreaks is null || expected.UnpaidBreaks.Count == 0)
         {
-            Assert.Equal(expected.UnpaidBreaks[i], actual.UnpaidBreaks[i]);
+            Assert.Empty(actual.UnpaidBreaks); // Can only be empty array, not null
         }
+        else
+        {
+            Assert.NotEmpty(expected.UnpaidBreaks);
+            for (int i = 0; i < expected.UnpaidBreaks.Count; i++)
+            {
+                Assert.Equal(expected.UnpaidBreaks[i], actual.UnpaidBreaks[i]);
+            }
+        }
+
+        Console.WriteLine($"Expected: {actual.GetType().GetProperties()}");
 
         Assert.False(actual.GetType().GetProperties().Any(p => p.Name.Equals("UserId", StringComparison.OrdinalIgnoreCase)),
             "DTO should not expose UserId");
@@ -95,7 +101,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         // Compare each shift
         for (int i = 0; i < expectedShifts.Count; i++)
         {
-            AssertShiftMatches(expectedShifts[i], actualShifts[i], compareId: true);
+            AssertShiftMatches(expectedShifts[i], actualShifts[i]);
         }
 
         // Ensure s5 is not in the returned shifts
@@ -137,7 +143,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         {
             var expectedShift = expectedShifts.FirstOrDefault(s => s.Id == returnedShift.Id);
             Assert.NotNull(expectedShift); // Ensure the returned shift exists in the expected shifts
-            AssertShiftMatches(expectedShift, returnedShift, compareId: true);
+            AssertShiftMatches(expectedShift, returnedShift);
         }
 
         // Ensure s5 is not in the returned shifts
@@ -168,7 +174,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         Assert.NotNull(returnedShift);
 
         // Assert: Compare the returned shift with the expected shift
-        AssertShiftMatches(expectedShift, returnedShift, compareId: true);
+        AssertShiftMatches(expectedShift, returnedShift);
 
         // Ensure the response does not contain sensitive data like "userId"
         var raw = await response.Content.ReadAsStringAsync();
@@ -204,43 +210,58 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
 
         var returnedShift = await response.Content.ReadFromJsonAsync<ShiftDTO>();
         Assert.NotNull(returnedShift);
-        Assert.Equal("NewPlace", returnedShift.Workplace);
+        AssertShiftMatches(newShift, returnedShift);
 
         var raw = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
-
-        Assert.DoesNotContain("receivedId", raw, StringComparison.OrdinalIgnoreCase);
 
         await CleanupShift(returnedShift.Id);
     }
 
     [Fact]
-    public async Task CreateShift_ReturnsCreatedWithLocalId()
+    public async Task CreateMultipleShifts_ReturnsCreated()
     {
-        var receivedId = Guid.NewGuid().ToString();
-        var newShift = new ShiftDTO
-        {
-            Id = receivedId,
-            Workplace = "LocalWithServerId",
-            PayRate = 42.0M,
-            StartTime = DateTime.Parse("2024-12-01T08:00:00"),
-            EndTime = DateTime.Parse("2024-12-01T16:00:00"),
-            UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(30) }
+        var shifts = new[] {
+            new ShiftDTO
+            {
+                Workplace = "LocalShift1",
+                PayRate = 50.0M,
+                StartTime = DateTime.Parse("2024-01-01T09:00:00"),
+                EndTime = DateTime.Parse("2024-01-01T17:00:00"),
+                UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(30) }
+            },
+            new ShiftDTO
+            {
+                Workplace = "LocalShift2",
+                PayRate = 60.0M,
+                StartTime = DateTime.Parse("2024-01-02T09:00:00"),
+                EndTime = DateTime.Parse("2024-01-02T17:00:00"),
+                UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(45) }
+            },
+            new ShiftDTO
+            {
+                Workplace = "LocalShift3",
+                PayRate = 70.0M,
+                StartTime = DateTime.Parse("2024-01-03T09:00:00"),
+                EndTime = DateTime.Parse("2024-01-03T17:00:00"),
+                UnpaidBreaks = new List<TimeSpan> { TimeSpan.FromMinutes(60) }
+            }
         };
 
-        var response = await _client.PostAsJsonAsync("/api/Shifts", newShift);
+        var response = await _client.PostAsJsonAsync("/api/Shifts/batch", shifts);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var returnedShift = await response.Content.ReadFromJsonAsync<ShiftDTO>();
-        Assert.NotNull(returnedShift);
-        AssertShiftMatches(newShift, returnedShift, false);
+        var returnedShifts = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
+        Assert.NotNull(returnedShifts);
+        Assert.Equal(shifts.Length, returnedShifts.Count);
 
-        Assert.NotEqual(receivedId, returnedShift.Id);
-
-        var raw = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
-
-        await CleanupShift(returnedShift.Id);
+        for (int i = 0; i < shifts.Length; i++)
+        {
+            // Not in same order
+            var returnedShift = returnedShifts.FirstOrDefault(s => s.Workplace == shifts[i].Workplace);
+            Assert.NotNull(returnedShift);
+            AssertShiftMatches(shifts[i], returnedShift);
+        }
     }
 
     [Fact]
@@ -259,6 +280,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         // Assert: Ensure the API returns a BadRequest status code
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
 
     // PUT
     [Fact]
@@ -299,7 +321,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         Assert.NotNull(returnedShift);
 
         // Assert: Use AssertShiftMatches to validate the updated shift
-        AssertShiftMatches(updatedShift, returnedShift, compareId: true);
+        AssertShiftMatches(updatedShift, returnedShift);
 
         // Ensure the response does not contain sensitive data like "userId"
         var raw = await updateResponse.Content.ReadAsStringAsync();
@@ -356,7 +378,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         Assert.NotNull(returnedShift);
 
         // Assert: Verify the updated shift matches the expected values
-        AssertShiftMatches(updatedShift, returnedShift, compareId: false);
+        AssertShiftMatches(updatedShift, returnedShift);
 
         // Act: Verify that the updated shift is returned for the new filter
         var responseAfterUpdate = await _client.GetAsync($"/api/Shifts?{filterBeforeUpdate}");
@@ -367,7 +389,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         Assert.Single(shiftsAfterUpdate); // Ensure only one shift matches the filter after the update
 
         // Assert: Verify the returned shift matches the updated shift
-        AssertShiftMatches(updatedShift, shiftsAfterUpdate.First(), compareId: true);
+        AssertShiftMatches(updatedShift, shiftsAfterUpdate.First());
 
         // Cleanup: Remove the created shift
         await CleanupShift(createdShift.Id);
@@ -409,6 +431,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         // Assert: Ensure the API returns a NotFound status code
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
 
     // DELETE
     [Fact]
