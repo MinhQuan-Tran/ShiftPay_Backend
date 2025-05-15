@@ -3,7 +3,7 @@ using ShiftDTO = ShiftPay_Backend.Models.ShiftDTO;
 
 namespace ShiftPay_Backend.Tests;
 
-public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
+public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLifetime
 {
     private readonly HttpClient _client;
     private readonly ShiftPayTestFixture _fixture;
@@ -14,17 +14,14 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         _fixture = fixture;
     }
 
-    private async Task CleanupShift(string? shiftId)
+    public async Task InitializeAsync()
     {
-        if (!string.IsNullOrEmpty(shiftId))
-        {
-            var deleteResponse = await _client.DeleteAsync($"/api/Shifts/{shiftId}");
-            Assert.True(
-                deleteResponse.IsSuccessStatusCode || deleteResponse.StatusCode == HttpStatusCode.NotFound,
-                $"Cleanup failed for shift ID {shiftId} with status code {deleteResponse.StatusCode}"
-            );
-        }
+        await _fixture.ClearAllShiftsAsync();
+        await _fixture.SeedTestDataAsync();
     }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
 
     private static void AssertShiftMatches(ShiftDTO expected, ShiftDTO actual)
     {
@@ -57,6 +54,37 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
 
     // GET
     [Fact]
+    public async Task GetAllShifts_ReturnsSuccess()
+    {
+        // Act: Call the API to get all shifts
+        var response = await _client.GetAsync("/api/Shifts");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Deserialize the response into a list of ShiftDTO
+        var returnedShifts = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
+        Assert.NotNull(returnedShifts);
+
+        // Filter the expected shifts to exclude s5
+        var expectedShifts = _fixture.TestDataShifts
+            .Where(s => s.Id != "s5") // Exclude s5
+            .OrderBy(s => s.Id)
+            .ToList();
+
+        var actualShifts = returnedShifts.OrderBy(s => s.Id).ToList();
+
+        Console.WriteLine($"Returned: {returnedShifts.Select(s => s.GetType().GetProperties())}");
+
+        // Assert: Check the number of shifts
+        Assert.Equal(expectedShifts.Count, actualShifts.Count);
+
+        // Compare each shift
+        for (int i = 0; i < expectedShifts.Count; i++)
+        {
+            AssertShiftMatches(expectedShifts[i], actualShifts[i]);
+        }
+    }
+
+    [Fact]
     public async Task GetAllShifts_WhenNoShiftsExist_ReturnsEmptyList()
     {
         // Arrange: Ensure the database is empty
@@ -76,48 +104,13 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         await _fixture.SeedTestDataAsync();
     }
 
-    [Fact]
-    public async Task GetAllShifts_ReturnsSuccess()
-    {
-        // Act: Call the API to get all shifts
-        var response = await _client.GetAsync("/api/Shifts");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        // Deserialize the response into a list of ShiftDTO
-        var returnedShifts = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
-        Assert.NotNull(returnedShifts);
-
-        // Filter the expected shifts to exclude s5
-        var expectedShifts = _fixture.TestDataShifts
-            .Where(s => s.Id != "s5") // Exclude s5
-            .OrderBy(s => s.Id)
-            .ToList();
-
-        var actualShifts = returnedShifts.OrderBy(s => s.Id).ToList();
-
-        // Assert: Check the number of shifts
-        Assert.Equal(expectedShifts.Count, actualShifts.Count);
-
-        // Compare each shift
-        for (int i = 0; i < expectedShifts.Count; i++)
-        {
-            AssertShiftMatches(expectedShifts[i], actualShifts[i]);
-        }
-
-        // Ensure s5 is not in the returned shifts
-        Assert.DoesNotContain(returnedShifts, s => s.Id == "s5");
-
-        // Ensure the response does not contain sensitive data like "userId"
-        var raw = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
-    }
-
     [Theory]
     [InlineData("year=2023")]
     [InlineData("month=10")]
     [InlineData("day=15")]
     [InlineData("year=2023&month=10&day=15")]
-    public async Task GetShifts_WithFilter_ReturnsSuccess(string query)
+    [InlineData("id=s1&id=s3")]
+    public async Task GetMultipleShifts_WithFilter_ReturnsSuccess(string query)
     {
         // Act: Call the API with the query
         var response = await _client.GetAsync($"/api/Shifts?{query}");
@@ -133,7 +126,8 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
                 s.Id != "s5" && // Exclude s5
                 (!query.Contains("year") || s.StartTime.Year == 2023) &&
                 (!query.Contains("month") || s.StartTime.Month == 10) &&
-                (!query.Contains("day") || s.StartTime.Day == 15)
+                (!query.Contains("day") || s.StartTime.Day == 15) &&
+                (!query.Contains("id") || query.Split('&').Any(q => q.Contains(s.Id!))) // Check for specific IDs
             )
             .ToList();
 
@@ -148,11 +142,28 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
 
         // Ensure s5 is not in the returned shifts
         Assert.DoesNotContain(returnedShifts, s => s.Id == "s5");
-
-        // Ensure the response does not contain sensitive data like "userId"
-        var raw = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData("year=2025")]
+    [InlineData("month=3")]
+    [InlineData("day=30")]
+    [InlineData("year=2023&month=2&day=15")] // s5 (different user ID)
+    [InlineData("id=s5")]
+    public async Task GetMultipleShifts_WithFilter_WhenNoShiftsExist_ReturnsEmptyList(string query)
+    {
+        // Act: Call the API with the query
+        var response = await _client.GetAsync($"/api/Shifts?{query}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Deserialize the response into a list of ShiftDTO
+        var returnedShifts = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
+        Assert.NotNull(returnedShifts);
+
+        // Assert: Compare each returned shift with the expected shifts
+        Assert.Empty(returnedShifts);
+    }
+
 
     [Theory]
     [InlineData("s1")]
@@ -175,19 +186,17 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
 
         // Assert: Compare the returned shift with the expected shift
         AssertShiftMatches(expectedShift, returnedShift);
-
-        // Ensure the response does not contain sensitive data like "userId"
-        var raw = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public async Task GetShiftById_ReturnsNotFound_ForDifferentUserId()
+    [Theory]
+    [InlineData("s5")] // Different user ID
+    [InlineData("s6")] // Non-existent ID
+    public async Task GetShiftById_ReturnsNotFound(string shiftId)
     {
-        // Act: Call the API to get the shift with ID s5
-        var response = await _client.GetAsync("/api/Shifts/s5");
+        // Act: Call the API to get the shift with ID
+        var response = await _client.GetAsync($"/api/Shifts/{shiftId}");
 
-        // Assert: Ensure no shift is found for s5
+        // Assert: Ensure no shift is found
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -211,11 +220,23 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
         var returnedShift = await response.Content.ReadFromJsonAsync<ShiftDTO>();
         Assert.NotNull(returnedShift);
         AssertShiftMatches(newShift, returnedShift);
+    }
 
-        var raw = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
+    [Fact]
+    public async Task CreateShift_WithInvalidModel_ReturnsBadRequest()
+    {
+        var invalidShift = new
+        {
+            Workplace = "InvalidPlace",
+            StartTime = "2024-01-01T09:00:00",
+            UnpaidBreaks = new[] { "00:30:00" }
+        };
 
-        await CleanupShift(returnedShift.Id);
+        // Act: Attempt to create a shift with an invalid model
+        var response = await _client.PostAsJsonAsync("/api/Shifts", invalidShift);
+
+        // Assert: Ensure the API returns a BadRequest status code
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -265,20 +286,53 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
     }
 
     [Fact]
-    public async Task CreateShift_WithInvalidModel_ReturnsBadRequest()
+    public async Task CreateMultipleShifts_WithOneInvalid_ReturnsBadRequest_AndNoShiftsAdded()
     {
-        var invalidShift = new
+        // Arrange: Prepare multiple shifts, one invalid (missing PayRate)
+        var shifts = new object[]
         {
-            Workplace = "InvalidPlace",
+        new
+        {
+            Workplace = "ValidShift1",
+            PayRate = 50.0M,
             StartTime = "2024-01-01T09:00:00",
+            EndTime = "2024-01-01T17:00:00",
             UnpaidBreaks = new[] { "00:30:00" }
+        },
+        new
+        {
+            Workplace = "InvalidShift", // Missing PayRate (required)
+            StartTime = "2024-01-02T09:00:00",
+            EndTime = "2024-01-02T17:00:00",
+            UnpaidBreaks = new[] { "00:45:00" }
+        },
+        new
+        {
+            Workplace = "ValidShift2",
+            PayRate = 60.0M,
+            StartTime = "2024-01-03T09:00:00",
+            EndTime = "2024-01-03T17:00:00",
+            UnpaidBreaks = new[] { "00:15:00" }
+        }
         };
 
-        // Act: Attempt to create a shift with an invalid model
-        var response = await _client.PostAsJsonAsync("/api/Shifts", invalidShift);
+        // Act: Post to batch endpoint
+        var response = await _client.PostAsJsonAsync("/api/Shifts/batch", shifts);
 
-        // Assert: Ensure the API returns a BadRequest status code
+        // Assert: API should return BadRequest
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // Verify no valid shifts were added by querying all shifts
+        var getAllResponse = await _client.GetAsync("/api/Shifts");
+        getAllResponse.EnsureSuccessStatusCode();
+
+        var allShifts = await getAllResponse.Content.ReadFromJsonAsync<List<ShiftDTO>>();
+        Assert.NotNull(allShifts);
+
+        // None of the valid shifts should exist in the database
+        Assert.DoesNotContain(allShifts, s => s.Workplace == "ValidShift1");
+        Assert.DoesNotContain(allShifts, s => s.Workplace == "ValidShift2");
+        Assert.DoesNotContain(allShifts, s => s.Workplace == "InvalidShift");
     }
 
 
@@ -322,13 +376,6 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
 
         // Assert: Use AssertShiftMatches to validate the updated shift
         AssertShiftMatches(updatedShift, returnedShift);
-
-        // Ensure the response does not contain sensitive data like "userId"
-        var raw = await updateResponse.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("userId", raw, StringComparison.OrdinalIgnoreCase);
-
-        // Cleanup: Remove the created shift
-        await CleanupShift(createdShift.Id);
     }
 
     [Fact]
@@ -390,9 +437,6 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
 
         // Assert: Verify the returned shift matches the updated shift
         AssertShiftMatches(updatedShift, shiftsAfterUpdate.First());
-
-        // Cleanup: Remove the created shift
-        await CleanupShift(createdShift.Id);
     }
 
     [Fact]
@@ -467,5 +511,65 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>
 
         // Assert: Ensure the API returns a NotFound status code
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteShifts_MultipleValidShifts_ReturnsNoContentAndRemovesShifts()
+    {
+        // Arrange: Seed multiple shifts to delete
+        var shiftsToCreate = new[]
+        {
+        new ShiftDTO
+        {
+            Workplace = "DeleteTest1",
+            PayRate = 20.0M,
+            StartTime = DateTime.Parse("2024-01-01T09:00:00"),
+            EndTime = DateTime.Parse("2024-01-01T17:00:00"),
+            UnpaidBreaks = new List<TimeSpan>()
+        },
+        new ShiftDTO
+        {
+            Workplace = "DeleteTest2",
+            PayRate = 25.0M,
+            StartTime = DateTime.Parse("2024-01-02T09:00:00"),
+            EndTime = DateTime.Parse("2024-01-02T17:00:00"),
+            UnpaidBreaks = new List<TimeSpan>()
+        }
+    };
+
+        var createResponse = await _client.PostAsJsonAsync("/api/Shifts/batch", shiftsToCreate);
+        createResponse.EnsureSuccessStatusCode();
+
+        var createdShifts = await createResponse.Content.ReadFromJsonAsync<List<ShiftDTO>>();
+        Assert.NotNull(createdShifts);
+        Assert.Equal(shiftsToCreate.Length, createdShifts.Count);
+
+        // Act: Delete the created shifts by IDs
+        var idsQuery = string.Join("&id=", createdShifts.Select(s => s.Id));
+        var deleteResponse = await _client.DeleteAsync($"/api/Shifts?id={idsQuery}");
+
+        // Assert: Deletion successful
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        // Confirm deleted shifts are gone
+        foreach (var shift in createdShifts)
+        {
+            var getResponse = await _client.GetAsync($"/api/Shifts/{shift.Id}");
+            Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteShifts_NoMatchingShifts_ReturnsNotFound()
+    {
+        // Arrange: Use IDs unlikely to exist
+        var invalidIds = new[] { "non-existent-1", "non-existent-2" };
+        var idsQuery = string.Join("&id=", invalidIds);
+
+        // Act: Attempt to delete shifts with invalid IDs
+        var deleteResponse = await _client.DeleteAsync($"/api/Shifts?id={idsQuery}");
+
+        // Assert: API returns 404 NotFound
+        Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
     }
 }

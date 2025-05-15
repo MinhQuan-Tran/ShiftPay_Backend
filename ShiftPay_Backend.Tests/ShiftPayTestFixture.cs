@@ -57,6 +57,8 @@ public class ShiftPayTestFixture : IAsyncLifetime
         var allShifts = await _context.Shifts.ToListAsync();
         _context.Shifts.RemoveRange(allShifts);
         await _context.SaveChangesAsync();
+
+        Console.WriteLine($"###############################Cleared shifts from the database.");
     }
 
     public async Task SeedTestDataAsync()
@@ -116,8 +118,8 @@ public class ShiftPayTestFixture : IAsyncLifetime
                 UserId = "test-user-id-1", // Different user ID
                 Workplace = "Starbucks",
                 PayRate = 28,
-                StartTime = new DateTime(2023, 9, 15, 7, 0, 0, DateTimeKind.Utc), // Matches year=2023
-                EndTime = new DateTime(2023, 9, 15, 15, 0, 0, DateTimeKind.Utc),
+                StartTime = new DateTime(2023, 2, 15, 7, 0, 0, DateTimeKind.Utc), // Matches year=2023
+                EndTime = new DateTime(2023, 2, 15, 15, 0, 0, DateTimeKind.Utc),
                 // No unpaid breaks
                 UnpaidBreaks = new List<TimeSpan>()
             },

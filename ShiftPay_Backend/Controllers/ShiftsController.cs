@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ShiftPay_Backend.Data;
 using ShiftPay_Backend.Models;
+using System.Linq.Expressions;
 using System.Security.Claims;
 
 namespace ShiftPay_Backend.Controllers
@@ -21,9 +22,16 @@ namespace ShiftPay_Backend.Controllers
             _context = context;
         }
 
-        // GET: api/Shifts?year=2023&month=10&day=15&id=id1&id=id2&id=id3 (or ids=id1&ids=id2&ids=id3)
+        // GET: api/Shifts?year=2023&month=10&day=15
+        //                  &startTime=2023-10-15T08:00:00&endTime=2023-10-15T17:00:00
+        //                  &id=shift1&id=shift2&id=shift3
+        //                  (or &ids=shift1&ids=shift2&ids=shift3)
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ShiftDTO>>> GetShifts(int? year, int? month, int? day, [FromQuery(Name = "id")] string[]? ids)
+        public async Task<ActionResult<IEnumerable<ShiftDTO>>> GetShifts(
+            int? year, int? month, int? day,            // Time
+            DateTime? startTime, DateTime? endTime,     // Time Range
+            [FromQuery(Name = "id")] string[]? ids      // IDs
+        )
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -31,18 +39,12 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var shifts = await _context.Shifts
-                .Where(s =>
-                    // User ID
-                    s.UserId == userId &&
-                    // IDs
-                    (ids == null || !ids.Any() || ids.Contains(s.Id)) &&
-                    // Year, Month, Day
-                    (!year.HasValue || s.YearMonth.StartsWith($"{year:D4}-")) &&
-                    (!month.HasValue || s.YearMonth.EndsWith($"-{month:D2}")) &&
-                    (!day.HasValue || s.Day == day)
-                )
-                .ToListAsync();
+            var shifts = await FilterShiftsAsync(
+                userId: userId,
+                year: year, month: month, day: day,
+                startTime: startTime, endTime: endTime,
+                ids: ids
+            );
 
             return Ok(shifts.Select(shift => shift.ToDTO()));
         }
@@ -57,12 +59,9 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var shift = await _context.Shifts
-                .Where(shift => shift.UserId == userId && shift.Id == id)
-                .Select(shift => shift.ToDTO())
-                .FirstOrDefaultAsync();
+            var shift = (await FilterShiftsAsync(userId: userId, ids: [id])).FirstOrDefault();
 
-            return shift != null ? Ok(shift) : NotFound("No matching shift found.");
+            return shift != default ? Ok(shift.ToDTO()) : NotFound("No matching shift found.");
         }
 
 
@@ -77,18 +76,20 @@ namespace ShiftPay_Backend.Controllers
             }
 
             // Check if shift exists
-            var existingShift = await _context.Shifts
-                .WithPartitionKey(userId)
-                .FirstOrDefaultAsync(e => e.Id == id);
+            var existingShift = (await FilterShiftsAsync(userId: userId, ids: [id])).FirstOrDefault();
 
             if (existingShift is null)
             {
                 return NotFound("No matching shift found.");
             }
 
-            var shift = Shift.FromDTO(recievedShiftDTO);
+            // To get YearMonth and Day from the DTO
+            var recievedShift = Shift.FromDTO(recievedShiftDTO);
 
-            var partitionChanged = existingShift.YearMonth != shift.YearMonth || existingShift.Day != shift.Day;
+            var partitionChanged =
+                existingShift.YearMonth != recievedShift.YearMonth ||
+                existingShift.Day != recievedShift.Day;
+
             if (partitionChanged)
             {
                 // If the partition key has changed, create a new shift in the new partition
@@ -96,39 +97,37 @@ namespace ShiftPay_Backend.Controllers
                 {
                     Id = id,
                     UserId = userId,
-                    Workplace = shift.Workplace,
-                    PayRate = shift.PayRate,
-                    StartTime = shift.StartTime,
-                    EndTime = shift.EndTime,
-                    UnpaidBreaks = shift.UnpaidBreaks
+                    Workplace = recievedShift.Workplace,
+                    PayRate = recievedShift.PayRate,
+                    StartTime = recievedShift.StartTime,
+                    EndTime = recievedShift.EndTime,
+                    UnpaidBreaks = recievedShift.UnpaidBreaks
                 });
 
                 _context.Shifts.Remove(existingShift);
             }
             else
             {
-                existingShift.Workplace = shift.Workplace;
-                existingShift.PayRate = shift.PayRate;
-                existingShift.StartTime = shift.StartTime;
-                existingShift.EndTime = shift.EndTime;
-                existingShift.UnpaidBreaks = shift.UnpaidBreaks;
+                existingShift.Workplace = recievedShift.Workplace;
+                existingShift.PayRate = recievedShift.PayRate;
+                existingShift.StartTime = recievedShift.StartTime;
+                existingShift.EndTime = recievedShift.EndTime;
+                existingShift.UnpaidBreaks = recievedShift.UnpaidBreaks;
 
                 _context.Shifts.Update(existingShift);
             }
 
             await _context.SaveChangesAsync();
 
-            var updatedShift = await _context.Shifts
-                .Where(s => s.UserId == userId && s.Id == id)
-                .Select(s => s.ToDTO())
-                .FirstOrDefaultAsync();
+            var updatedShift = (await FilterShiftsAsync(userId: userId, ids: [recievedShift.Id]))
+                .FirstOrDefault();
 
             if (updatedShift is null)
             {
                 return NotFound("Something went wrong. Updated shift not found.");
             }
 
-            return Ok(updatedShift);
+            return Ok(updatedShift.ToDTO());
         }
 
 
@@ -142,11 +141,11 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var shift = Shift.FromDTO(recievedShiftDTO);
-            shift.Id = Guid.NewGuid().ToString(); // Generate a new ID for the shift
-            shift.UserId = userId; // Set the UserId to the current user's ID
+            var recievedShift = Shift.FromDTO(recievedShiftDTO);
+            recievedShift.Id = Guid.NewGuid().ToString(); // Generate a new ID for the shift
+            recievedShift.UserId = userId; // Set the UserId to the current user's ID
 
-            _context.Shifts.Add(shift);
+            _context.Shifts.Add(recievedShift);
 
             try
             {
@@ -154,27 +153,21 @@ namespace ShiftPay_Backend.Controllers
             }
             catch (DbUpdateException)
             {
-                if (ShiftExists(shift.Id, userId))
-                {
-                    return Conflict();
-                }
-                else
-                {
-                    throw;
-                }
+                return Conflict();
             }
 
-            var updatedShift = await _context.Shifts
-                .Where(s => s.UserId == userId && s.Id == shift.Id)
-                .Select(s => s.ToDTO())
-                .FirstOrDefaultAsync();
+            var addeddShift = (await FilterShiftsAsync(
+                userId: userId,
+                ids: [recievedShift.Id]
+                ))
+                .FirstOrDefault();
 
-            if (updatedShift is null)
+            if (addeddShift is null)
             {
-                return NotFound("Something went wrong. Updated shift not found.");
+                return NotFound("Something went wrong. Added shift not found.");
             }
 
-            return CreatedAtAction("GetShift", new { id = updatedShift.Id }, updatedShift);
+            return CreatedAtAction("GetShift", new { id = addeddShift.Id }, addeddShift.ToDTO());
         }
 
         // POST: api/Shifts/batch
@@ -187,7 +180,7 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var shifts = recievedShiftDTOs.Select(shiftDTO =>
+            var recievedShifts = recievedShiftDTOs.Select(shiftDTO =>
             {
                 var shift = Shift.FromDTO(shiftDTO);
                 shift.Id = Guid.NewGuid().ToString(); // Generate a new ID for the shift
@@ -195,7 +188,7 @@ namespace ShiftPay_Backend.Controllers
                 return shift;
             }).ToList();
 
-            _context.Shifts.AddRange(shifts);
+            _context.Shifts.AddRange(recievedShifts);
 
             try
             {
@@ -206,23 +199,60 @@ namespace ShiftPay_Backend.Controllers
                 return Conflict();
             }
 
-            var updatedShifts = await _context.Shifts
-                .Where(s => s.UserId == userId && shifts.Select(r => r.Id).Contains(s.Id))
+            var addedShifts = (await FilterShiftsAsync(
+                userId: userId,
+                ids: recievedShifts.Select(s => s.Id).ToArray()
+                ))
                 .Select(s => s.ToDTO())
-                .ToListAsync();
+                .ToList();
 
-            if (updatedShifts is null || updatedShifts.Count != shifts.Count)
+            if (addedShifts is null || addedShifts.Count != recievedShifts.Count)
             {
                 return NotFound("Something went wrong. Updated shifts not found.");
             }
 
             return CreatedAtAction(
                 "GetShifts",
-                new { id = updatedShifts.Select(s => s.Id).ToArray() },
-                updatedShifts
+                new { id = addedShifts.Select(s => s.Id).ToArray() },
+                addedShifts
             );
         }
 
+
+        // DELETE: api/Shifts?year=2023&month=10&day=15
+        //                  &startTime=2023-10-15T08:00:00&endTime=2023-10-15T17:00:00
+        //                  &id=shift1&id=shift2&id=shift3
+        //                  (or &ids=shift1&ids=shift2&ids=shift3)
+        [HttpDelete]
+        public async Task<IActionResult> DeleteShifts(
+            int? year, int? month, int? day,            // Time
+            DateTime? startTime, DateTime? endTime,     // Time Range
+            [FromQuery(Name = "id")] string[]? ids      // IDs
+        )
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User ID is missing.");
+            }
+
+            var shifts = await FilterShiftsAsync(
+                userId: userId,
+                year: year, month: month, day: day,
+                startTime: startTime, endTime: endTime,
+                ids: ids
+            );
+
+            if (shifts.Count == 0)
+            {
+                return NotFound("No matching shifts found.");
+            }
+
+            _context.Shifts.RemoveRange(shifts);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
 
         // DELETE: api/Shifts/5
         [HttpDelete("{id}")]
@@ -234,7 +264,7 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var shift = await _context.Shifts.Where(e => e.UserId == userId && e.Id == id).FirstOrDefaultAsync();
+            var shift = (await FilterShiftsAsync(userId: userId, ids: [id])).FirstOrDefault();
 
             if (shift is null)
             {
@@ -247,10 +277,35 @@ namespace ShiftPay_Backend.Controllers
             return NoContent();
         }
 
-
-        private bool ShiftExists(string id, string userId)
+        private async Task<List<Shift>> FilterShiftsAsync(
+            string userId,                                          // User ID
+            int? year = null, int? month = null, int? day = null,   // Time
+            DateTime? startTime = null, DateTime? endTime = null,   // Time Range
+            string[]? ids = null                                    // IDs
+        )
         {
-            return _context.Shifts.Any(e => e.Id == id && e.UserId == userId);
+            return await _context.Shifts
+                .WithPartitionKey(userId)
+
+                // Use current order for performance
+                .Where(TimeRangeFilter(startTime, endTime))
+                .Where(IdFilter(ids))
+                .Where(DateFilter(year, month, day))
+
+                .ToListAsync();
+
+            // Filters
+            static Expression<Func<Shift, bool>> TimeRangeFilter(DateTime? start, DateTime? end) =>
+                s => (!start.HasValue || s.StartTime >= start.Value) &&
+                     (!end.HasValue || s.EndTime <= end.Value);
+
+            static Expression<Func<Shift, bool>> IdFilter(string[]? ids) =>
+                s => ids == null || !ids.Any() || ids.Contains(s.Id);
+
+            static Expression<Func<Shift, bool>> DateFilter(int? year, int? month, int? day) =>
+                s => (!year.HasValue || s.YearMonth.StartsWith($"{year:D4}-")) &&
+                     (!month.HasValue || s.YearMonth.EndsWith($"-{month:D2}")) &&
+                     (!day.HasValue || s.Day == day);
         }
     }
 }
