@@ -8,6 +8,14 @@ using ShiftPay_Backend.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Allow CORS 
+builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
+    policy.WithOrigins("http://localhost:8080", "https://payment-calculator-mqtran.netlify.app/")
+     .AllowAnyMethod()
+     .AllowAnyHeader()
+     .AllowCredentials()
+));
+
 // Support environment-based config
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
@@ -86,6 +94,8 @@ app.MapDefaultEndpoints();
 app.MapOpenApi();
 
 app.UseHttpsRedirection();
+
+app.UseCors("frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
