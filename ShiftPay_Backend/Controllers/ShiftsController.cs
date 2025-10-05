@@ -67,7 +67,7 @@ namespace ShiftPay_Backend.Controllers
 
         // PUT: api/Shifts/5
         [HttpPut("{id}")]
-        public async Task<ActionResult<ShiftDTO>> PutShift(string id, ShiftDTO recievedShiftDTO)
+        public async Task<ActionResult<ShiftDTO>> PutShift(Guid id, ShiftDTO recievedShiftDTO)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
