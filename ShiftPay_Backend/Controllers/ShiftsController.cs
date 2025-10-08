@@ -30,7 +30,7 @@ namespace ShiftPay_Backend.Controllers
         public async Task<ActionResult<IEnumerable<ShiftDTO>>> GetShifts(
             int? year, int? month, int? day,            // Time
             DateTime? startTime, DateTime? endTime,     // Time Range
-            [FromQuery(Name = "id")] string[]? ids      // IDs
+            [FromQuery(Name = "id")] Guid[]? ids      // IDs
         )
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -51,7 +51,7 @@ namespace ShiftPay_Backend.Controllers
 
         // GET: api/Shifts/abc-123
         [HttpGet("{id}")]
-        public async Task<ActionResult<ShiftDTO>> GetShift(string id)
+        public async Task<ActionResult<ShiftDTO>> GetShift(Guid id)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -142,7 +142,7 @@ namespace ShiftPay_Backend.Controllers
             }
 
             var recievedShift = Shift.FromDTO(recievedShiftDTO);
-            recievedShift.Id = Guid.NewGuid().ToString(); // Generate a new ID for the shift
+            recievedShift.Id = Guid.NewGuid(); // Generate a new ID for the shift
             recievedShift.UserId = userId; // Set the UserId to the current user's ID
 
             _context.Shifts.Add(recievedShift);
@@ -183,7 +183,7 @@ namespace ShiftPay_Backend.Controllers
             var recievedShifts = recievedShiftDTOs.Select(shiftDTO =>
             {
                 var shift = Shift.FromDTO(shiftDTO);
-                shift.Id = Guid.NewGuid().ToString(); // Generate a new ID for the shift
+                shift.Id = Guid.NewGuid(); // Generate a new ID for the shift
                 shift.UserId = userId; // Set the UserId to the current user's ID
                 return shift;
             }).ToList();
@@ -227,7 +227,7 @@ namespace ShiftPay_Backend.Controllers
         public async Task<IActionResult> DeleteShifts(
             int? year, int? month, int? day,            // Time
             DateTime? startTime, DateTime? endTime,     // Time Range
-            [FromQuery(Name = "id")] string[]? ids      // IDs
+            [FromQuery(Name = "id")] Guid[]? ids      // IDs
         )
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -256,7 +256,7 @@ namespace ShiftPay_Backend.Controllers
 
         // DELETE: api/Shifts/5
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteShift(string id)
+        public async Task<IActionResult> DeleteShift(Guid id)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -281,7 +281,7 @@ namespace ShiftPay_Backend.Controllers
             string userId,                                          // User ID
             int? year = null, int? month = null, int? day = null,   // Time
             DateTime? startTime = null, DateTime? endTime = null,   // Time Range
-            string[]? ids = null                                    // IDs
+            Guid[]? ids = null                                    // IDs
         )
         {
             return await _context.Shifts
@@ -299,7 +299,7 @@ namespace ShiftPay_Backend.Controllers
                 s => (!start.HasValue || s.StartTime >= start.Value) &&
                      (!end.HasValue || s.EndTime <= end.Value);
 
-            static Expression<Func<Shift, bool>> IdFilter(string[]? ids) =>
+            static Expression<Func<Shift, bool>> IdFilter(Guid[]? ids) =>
                 s => ids == null || !ids.Any() || ids.Contains(s.Id);
 
             static Expression<Func<Shift, bool>> DateFilter(int? year, int? month, int? day) =>
