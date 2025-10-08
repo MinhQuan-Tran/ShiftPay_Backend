@@ -1,4 +1,4 @@
-name: Build and deploy .NET Core application to Web App ShiftPayBackend with API Management Service ShiftPayBackendAPI-ShiftPayBackend
+name: Build and deploy .NET application to Azure Web App (ShiftPayBackend) via OIDC
 
 on:
   push:
@@ -8,11 +8,6 @@ on:
 env:
   AZURE_WEBAPP_NAME: ShiftPayBackend
   AZURE_WEBAPP_PACKAGE_PATH: ShiftPay_Backend\publish
-  AZURE_APIM_RESOURCE_PATH: /
-  AZURE_APIM_RESOURCEGROUP: shiftpay
-  AZURE_APIM_SERVICENAME: ShiftPayBackendAPI
-  AZURE_APIM_API_ID: ShiftPayBackend
-  AZURE_APIM_APPSERVICEURL: https://shiftpaybackend.azurewebsites.net
   CONFIGURATION: Release
   DOTNET_CORE_VERSION: 9.0.x
   WORKING_DIRECTORY: ShiftPay_Backend
@@ -40,7 +35,7 @@ jobs:
       - name: Publish
         run: dotnet publish ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Publish Artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: webapp
@@ -49,35 +44,28 @@ jobs:
   deploy:
     runs-on: windows-latest
     needs: build
+    permissions:
+      id-token: write
+      contents: read
     steps:
-      - name: Download artifact from build job
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Azure Login
+      - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.ShiftPayBackendAPI_SPN }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy to Azure WebApp
-        uses: azure/webapps-deploy@v2
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Import API into Azure API Management
-        run: >
-          az apim api import
-          --path "${{ env.AZURE_APIM_RESOURCE_PATH }}"
-          --resource-group "${{ env.AZURE_APIM_RESOURCEGROUP }}"
-          --service-name "${{ env.AZURE_APIM_SERVICENAME }}"
-          --api-id "${{ env.AZURE_APIM_API_ID }}"
-          --service-url "${{ env.AZURE_APIM_APPSERVICEURL }}"
-          --specification-url "${{ env.AZURE_APIM_APPSERVICEURL }}/openapi/v1.json"
-          --specification-format OpenApi
-          --subscription-required false
-
-      - name: logout
+      - name: Logout
         run: az logout

@@ -4,9 +4,6 @@
       "type": "secrets",
       "connectionId": "KeyVaultUri"
     },
-    "apis1": {
-      "type": "apis"
-    },
     "cosmosdb1": {
       "type": "cosmosdb",
       "connectionId": "ConnectionStrings:ShiftPay_BackendContext",
