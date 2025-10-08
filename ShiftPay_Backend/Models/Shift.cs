@@ -5,7 +5,7 @@ namespace ShiftPay_Backend.Models
     public class Shift
     {
         [JsonProperty(PropertyName = "id")]
-        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public Guid Id { get; set; } = Guid.NewGuid();
 
         [JsonProperty(PropertyName = "UserId")]
         public string UserId { get; set; } = string.Empty; // Partition Key 1
@@ -81,7 +81,7 @@ namespace ShiftPay_Backend.Models
         {
             return new Shift
             {
-                Id = dto.Id ?? Guid.NewGuid().ToString(),
+                Id = dto.Id ?? Guid.NewGuid(),
                 Workplace = dto.Workplace,
                 PayRate = dto.PayRate,
                 StartTime = dto.StartTime,
@@ -93,7 +93,7 @@ namespace ShiftPay_Backend.Models
 
     public class ShiftDTO
     {
-        public string? Id { get; set; }
+        public Guid? Id { get; set; }
         public required string Workplace { get; set; }
         public required decimal PayRate { get; set; }
         public required DateTime StartTime { get; set; }

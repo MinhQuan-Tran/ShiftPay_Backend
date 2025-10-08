@@ -8,6 +8,15 @@ namespace ShiftPay_Backend.Tests;
 
 public class ShiftPayTestFixture : IAsyncLifetime
 {
+
+    public const string S1 = "00000000-0000-0000-0000-000000000001";
+    public const string S2 = "00000000-0000-0000-0000-000000000002";
+    public const string S3 = "00000000-0000-0000-0000-000000000003";
+    public const string S4 = "00000000-0000-0000-0000-000000000004";
+    public const string S5 = "00000000-0000-0000-0000-000000000005";
+    public const string S6 = "00000000-0000-0000-0000-000000000006"; // Non-existent shift
+    public const string S7 = "00000000-0000-0000-0000-000000000007"; // Non-existent shift
+
     public HttpClient Client { get; private set; } = null!;
     public List<ShiftDTO> TestDataShifts { get; } = new();
 
@@ -70,7 +79,7 @@ public class ShiftPayTestFixture : IAsyncLifetime
         {
             new Shift
             {
-                Id = "s1",
+                Id = Guid.Parse(S1),
                 UserId = "test-user-id",
                 Workplace = "McDonald",
                 PayRate = 25,
@@ -81,7 +90,7 @@ public class ShiftPayTestFixture : IAsyncLifetime
             },
             new Shift
             {
-                Id = "s2",
+                Id = Guid.Parse(S2),
                 UserId = "test-user-id",
                 Workplace = "KFC",
                 PayRate = 30,
@@ -92,7 +101,7 @@ public class ShiftPayTestFixture : IAsyncLifetime
             },
             new Shift
             {
-                Id = "s3",
+                Id = Guid.Parse(S3),
                 UserId = "test-user-id",
                 Workplace = "Starbucks",
                 PayRate = 28,
@@ -103,7 +112,7 @@ public class ShiftPayTestFixture : IAsyncLifetime
             },
             new Shift
             {
-                Id = "s4",
+                Id = Guid.Parse(S4),
                 UserId = "test-user-id",
                 Workplace = "Burger King",
                 PayRate = 20,
@@ -114,7 +123,7 @@ public class ShiftPayTestFixture : IAsyncLifetime
             },
             new Shift
             {
-                Id = "s5",
+                Id = Guid.Parse(S5),
                 UserId = "test-user-id-1", // Different user ID
                 Workplace = "Starbucks",
                 PayRate = 28,

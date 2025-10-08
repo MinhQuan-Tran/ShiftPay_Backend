@@ -64,9 +64,9 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
         var returnedShifts = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
         Assert.NotNull(returnedShifts);
 
-        // Filter the expected shifts to exclude s5
+        // Filter the expected shifts to exclude S5
         var expectedShifts = _fixture.TestDataShifts
-            .Where(s => s.Id != "s5") // Exclude s5
+            .Where(s => s.Id != Guid.Parse(ShiftPayTestFixture.S5)) // Exclude S5
             .OrderBy(s => s.Id)
             .ToList();
 
@@ -109,7 +109,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
     [InlineData("month=10")]
     [InlineData("day=15")]
     [InlineData("year=2023&month=10&day=15")]
-    [InlineData("id=s1&id=s3")]
+    [InlineData($"id={ShiftPayTestFixture.S1}&id={ShiftPayTestFixture.S3}")]
     public async Task GetMultipleShifts_WithFilter_ReturnsSuccess(string query)
     {
         // Act: Call the API with the query
@@ -120,14 +120,14 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
         var returnedShifts = await response.Content.ReadFromJsonAsync<List<ShiftDTO>>();
         Assert.NotNull(returnedShifts);
 
-        // Filter the expected shifts based on the query and exclude s5
+        // Filter the expected shifts based on the query and exclude S5
         var expectedShifts = _fixture.TestDataShifts
             .Where(s =>
-                s.Id != "s5" && // Exclude s5
+                s.Id != Guid.Parse(ShiftPayTestFixture.S5) && // Exclude S5
                 (!query.Contains("year") || s.StartTime.Year == 2023) &&
                 (!query.Contains("month") || s.StartTime.Month == 10) &&
                 (!query.Contains("day") || s.StartTime.Day == 15) &&
-                (!query.Contains("id") || query.Split('&').Any(q => q.Contains(s.Id!))) // Check for specific IDs
+                (!query.Contains("id") || query.Split('&').Any(q => q.Contains(s.Id?.ToString() ?? string.Empty))) // Check for specific IDs
             )
             .ToList();
 
@@ -140,16 +140,16 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
             AssertShiftMatches(expectedShift, returnedShift);
         }
 
-        // Ensure s5 is not in the returned shifts
-        Assert.DoesNotContain(returnedShifts, s => s.Id == "s5");
+        // Ensure S5 is not in the returned shifts
+        Assert.DoesNotContain(returnedShifts, s => s.Id == Guid.Parse(ShiftPayTestFixture.S5));
     }
 
     [Theory]
     [InlineData("year=2025")]
     [InlineData("month=3")]
     [InlineData("day=30")]
-    [InlineData("year=2023&month=2&day=15")] // s5 (different user ID)
-    [InlineData("id=s5")]
+    [InlineData("year=2023&month=2&day=15")]
+    [InlineData($"id={ShiftPayTestFixture.S5}")] // different user ID
     public async Task GetMultipleShifts_WithFilter_WhenNoShiftsExist_ReturnsEmptyList(string query)
     {
         // Act: Call the API with the query
@@ -166,14 +166,14 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
 
 
     [Theory]
-    [InlineData("s1")]
-    [InlineData("s2")]
-    [InlineData("s3")]
-    [InlineData("s4")]
+    [InlineData(ShiftPayTestFixture.S1)]
+    [InlineData(ShiftPayTestFixture.S2)]
+    [InlineData(ShiftPayTestFixture.S3)]
+    [InlineData(ShiftPayTestFixture.S4)]
     public async Task GetShiftById_ReturnsCorrectShift(string shiftId)
     {
         // Arrange: Get the expected shift
-        var expectedShift = _fixture.TestDataShifts.FirstOrDefault(s => s.Id == shiftId);
+        var expectedShift = _fixture.TestDataShifts.FirstOrDefault(s => s.Id?.ToString() == shiftId);
         Assert.NotNull(expectedShift); // Ensure the shift exists in the test data
 
         // Act: Call the API to get the shift by ID
@@ -189,8 +189,8 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
     }
 
     [Theory]
-    [InlineData("s5")] // Different user ID
-    [InlineData("s6")] // Non-existent ID
+    [InlineData(ShiftPayTestFixture.S5)] // Different user ID
+    [InlineData(ShiftPayTestFixture.S6)] // Non-existent ID
     public async Task GetShiftById_ReturnsNotFound(string shiftId)
     {
         // Act: Call the API to get the shift with ID
@@ -470,7 +470,7 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
         };
 
         // Act: Attempt to update a non-existent shift
-        var response = await _client.PutAsJsonAsync("/api/Shifts/non-existent-id", updatedShift);
+        var response = await _client.PutAsJsonAsync($"/api/Shifts/{ShiftPayTestFixture.S6}", updatedShift);
 
         // Assert: Ensure the API returns a NotFound status code
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -507,10 +507,20 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
     public async Task DeleteShift_InvalidId_ReturnsNotFound()
     {
         // Act: Attempt to delete a shift with an invalid ID
-        var response = await _client.DeleteAsync("/api/Shifts/invalid-id");
+        var response = await _client.DeleteAsync($"/api/Shifts/{ShiftPayTestFixture.S6}");
 
         // Assert: Ensure the API returns a NotFound status code
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteShift_NonExistentShift_ReturnsNotFound()
+    {
+        // Act: Attempt to delete a shift with an non-existent ID
+        var response = await _client.DeleteAsync("/api/Shifts/invalid-id");
+
+        // Assert: Ensure the API returns a NotFound status code
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -560,7 +570,21 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
     }
 
     [Fact]
-    public async Task DeleteShifts_NoMatchingShifts_ReturnsNotFound()
+    public async Task DeleteShifts_NonExistentShifts_ReturnsNotFound()
+    {
+        // Arrange: Use IDs unlikely to exist
+        var nonExistentShiftIds = new[] { ShiftPayTestFixture.S6, ShiftPayTestFixture.S7 };
+        var idsQuery = string.Join("&id=", nonExistentShiftIds);
+
+        // Act: Attempt to delete shifts with invalid IDs
+        var deleteResponse = await _client.DeleteAsync($"/api/Shifts?id={idsQuery}");
+
+        // Assert: API returns 404 NotFound
+        Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteShifts_InvalidShiftIds_ReturnsNotFound()
     {
         // Arrange: Use IDs unlikely to exist
         var invalidIds = new[] { "non-existent-1", "non-existent-2" };
@@ -570,6 +594,6 @@ public class ShiftControllerTests : IClassFixture<ShiftPayTestFixture>, IAsyncLi
         var deleteResponse = await _client.DeleteAsync($"/api/Shifts?id={idsQuery}");
 
         // Assert: API returns 404 NotFound
-        Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, deleteResponse.StatusCode);
     }
 }
