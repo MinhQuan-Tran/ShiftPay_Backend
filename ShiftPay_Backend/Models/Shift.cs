@@ -7,13 +7,10 @@ namespace ShiftPay_Backend.Models
         [JsonProperty(PropertyName = "id")]
         public Guid Id { get; set; } = Guid.NewGuid();
 
-        [JsonProperty(PropertyName = "UserId")]
         public string UserId { get; set; } = string.Empty; // Partition Key 1
 
-        [JsonProperty(PropertyName = "YearMonth")]
         public string YearMonth { get; private set; } = string.Empty; // Partition Key 2
 
-        [JsonProperty(PropertyName = "Day")]
         public int Day { get; private set; } // Partition Key 3
 
         public required string Workplace { get; set; }
@@ -94,10 +91,15 @@ namespace ShiftPay_Backend.Models
     public class ShiftDTO
     {
         public Guid? Id { get; set; }
+
         public required string Workplace { get; set; }
+
         public required decimal PayRate { get; set; }
+
         public required DateTime StartTime { get; set; }
+
         public required DateTime EndTime { get; set; }
+
         public required List<TimeSpan> UnpaidBreaks { get; set; }
     }
 }
