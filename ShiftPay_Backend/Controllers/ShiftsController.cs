@@ -129,7 +129,7 @@ namespace ShiftPay_Backend.Controllers
             catch (DbUpdateConcurrencyException ex)
             {
                 _logger.LogWarning(ex, "Concurrency error when updating shift {ShiftId} for user {UserId}", id, userId);
-                return NotFound("The shift was updated or deleted by another process.");
+                return Conflict("The shift was updated or deleted by another process.");
             }
             catch (DbUpdateException ex)
             {
