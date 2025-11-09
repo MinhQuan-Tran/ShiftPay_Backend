@@ -68,7 +68,7 @@ namespace ShiftPay_Backend.Controllers
 
         // PUT: api/Shifts/abc-123
         [HttpPut("{id}")]
-        public async Task<ActionResult<ShiftDTO>> PutShift(Guid id, ShiftDTO recievedShiftDTO)
+        public async Task<ActionResult<ShiftDTO>> PutShift(Guid id, ShiftDTO receivedShiftDTO)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -77,7 +77,7 @@ namespace ShiftPay_Backend.Controllers
             }
 
             // Optional safety: ensure payload Id (if provided) matches route Id
-            if (recievedShiftDTO.Id.HasValue && recievedShiftDTO.Id.Value != id)
+            if (receivedShiftDTO.Id.HasValue && receivedShiftDTO.Id.Value != id)
             {
                 return BadRequest("Route id and payload id do not match.");
             }
@@ -89,11 +89,11 @@ namespace ShiftPay_Backend.Controllers
             }
 
             // To get YearMonth and Day from the DTO
-            var recievedShift = Shift.FromDTO(recievedShiftDTO);
+            var receivedShift = Shift.FromDTO(receivedShiftDTO);
 
             var partitionChanged =
-                existingShift.YearMonth != recievedShift.YearMonth ||
-                existingShift.Day != recievedShift.Day;
+                existingShift.YearMonth != receivedShift.YearMonth ||
+                existingShift.Day != receivedShift.Day;
 
             EntityEntry<Shift> entry;
 
@@ -103,21 +103,21 @@ namespace ShiftPay_Backend.Controllers
                 {
                     Id = id,
                     UserId = userId,
-                    Workplace = recievedShift.Workplace,
-                    PayRate = recievedShift.PayRate,
-                    StartTime = recievedShift.StartTime,
-                    EndTime = recievedShift.EndTime,
-                    UnpaidBreaks = recievedShift.UnpaidBreaks
+                    Workplace = receivedShift.Workplace,
+                    PayRate = receivedShift.PayRate,
+                    StartTime = receivedShift.StartTime,
+                    EndTime = receivedShift.EndTime,
+                    UnpaidBreaks = receivedShift.UnpaidBreaks
                 });
                 _context.Shifts.Remove(existingShift);
             }
             else
             {
-                existingShift.Workplace = recievedShift.Workplace;
-                existingShift.PayRate = recievedShift.PayRate;
-                existingShift.StartTime = recievedShift.StartTime;
-                existingShift.EndTime = recievedShift.EndTime;
-                existingShift.UnpaidBreaks = recievedShift.UnpaidBreaks;
+                existingShift.Workplace = receivedShift.Workplace;
+                existingShift.PayRate = receivedShift.PayRate;
+                existingShift.StartTime = receivedShift.StartTime;
+                existingShift.EndTime = receivedShift.EndTime;
+                existingShift.UnpaidBreaks = receivedShift.UnpaidBreaks;
 
                 entry = _context.Shifts.Update(existingShift);
             }
@@ -142,7 +142,7 @@ namespace ShiftPay_Backend.Controllers
 
         // POST: api/Shifts
         [HttpPost]
-        public async Task<ActionResult<ShiftDTO>> PostShift(ShiftDTO recievedShiftDTO)
+        public async Task<ActionResult<ShiftDTO>> PostShift(ShiftDTO receivedShiftDTO)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -150,11 +150,11 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var recievedShift = Shift.FromDTO(recievedShiftDTO);
-            recievedShift.Id = Guid.NewGuid(); // Generate a new ID for the shift
-            recievedShift.UserId = userId; // Set the UserId to the current user's ID
+            var receivedShift = Shift.FromDTO(receivedShiftDTO);
+            receivedShift.Id = Guid.NewGuid(); // Generate a new ID for the shift
+            receivedShift.UserId = userId; // Set the UserId to the current user's ID
 
-            _context.Shifts.Add(recievedShift);
+            _context.Shifts.Add(receivedShift);
 
             try
             {
@@ -167,7 +167,7 @@ namespace ShiftPay_Backend.Controllers
 
             var addedShift = (await FilterShiftsAsync(
                 userId: userId,
-                ids: [recievedShift.Id]
+                ids: [receivedShift.Id]
                 ))
                 .FirstOrDefault();
 
@@ -181,7 +181,7 @@ namespace ShiftPay_Backend.Controllers
 
         // POST: api/Shifts/batch
         [HttpPost("batch")]
-        public async Task<ActionResult<IEnumerable<ShiftDTO>>> PostShiftBatch(ShiftDTO[] recievedShiftDTOs)
+        public async Task<ActionResult<IEnumerable<ShiftDTO>>> PostShiftBatch(ShiftDTO[] receivedShiftDTOs)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -189,7 +189,7 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var recievedShifts = recievedShiftDTOs.Select(shiftDTO =>
+            var receivedShifts = receivedShiftDTOs.Select(shiftDTO =>
             {
                 var shift = Shift.FromDTO(shiftDTO);
                 shift.Id = Guid.NewGuid(); // Generate a new ID for the shift
@@ -197,7 +197,7 @@ namespace ShiftPay_Backend.Controllers
                 return shift;
             }).ToList();
 
-            _context.Shifts.AddRange(recievedShifts);
+            _context.Shifts.AddRange(receivedShifts);
 
             try
             {
@@ -210,12 +210,12 @@ namespace ShiftPay_Backend.Controllers
 
             var addedShifts = (await FilterShiftsAsync(
                 userId: userId,
-                ids: recievedShifts.Select(s => s.Id).ToArray()
+                ids: receivedShifts.Select(s => s.Id).ToArray()
                 ))
                 .Select(s => s.ToDTO())
                 .ToList();
 
-            if (addedShifts is null || addedShifts.Count != recievedShifts.Count)
+            if (addedShifts is null || addedShifts.Count != receivedShifts.Count)
             {
                 return NotFound("Something went wrong. Updated shifts not found.");
             }
