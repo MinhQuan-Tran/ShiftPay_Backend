@@ -74,11 +74,12 @@ namespace ShiftPay_Backend.Models
             };
         }
 
-        public static Shift FromDTO(ShiftDTO dto)
+        public static Shift FromDTO(ShiftDTO dto, string userId)
         {
             return new Shift
             {
                 Id = dto.Id ?? Guid.NewGuid(),
+                UserId = userId,
                 Workplace = dto.Workplace,
                 PayRate = dto.PayRate,
                 StartTime = dto.StartTime,
