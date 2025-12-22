@@ -31,7 +31,9 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
+			// Cosmos: WorkInfo partition key is (UserId, Workplace). Constrain to the UserId partition.
 			var workInfos = await _context.WorkInfos
+				.WithPartitionKey(userId)
 				.Where(wi => wi.UserId == userId)
 				.ToListAsync();
 
@@ -48,7 +50,9 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
+			// Cosmos: WorkInfo uses a composite partition key (UserId, Workplace)
 			var workInfo = await _context.WorkInfos
+				.WithPartitionKey(userId, workplace)
 				.FirstOrDefaultAsync(wi => wi.UserId == userId && wi.Workplace == workplace);
 
 			if (workInfo == null)
@@ -71,7 +75,9 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
+			// Cosmos: WorkInfo uses a composite partition key (UserId, Workplace)
 			var workInfo = await _context.WorkInfos
+				.WithPartitionKey(userId, workInfoDto.Workplace)
 				.FirstOrDefaultAsync(wi => wi.UserId == userId && wi.Workplace == workInfoDto.Workplace);
 
 			if (workInfo == null)
@@ -100,16 +106,18 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
+			// Cosmos: WorkInfo uses a composite partition key (UserId, Workplace)
 			var workInfo = await _context.WorkInfos
+				.WithPartitionKey(userId, workplace)
 				.FirstOrDefaultAsync(wi => wi.UserId == userId && wi.Workplace == workplace);
-
-			if (workInfo == null)
-			{
-				return NotFound();
-			}
 
 			if (payRate.HasValue)
 			{
+				if (workInfo == null)
+				{
+					return NotFound();
+				}
+
 				if (workInfo.PayRates.Contains(payRate.Value))
 				{
 					workInfo.PayRates.Remove(payRate.Value);
@@ -120,7 +128,10 @@ namespace ShiftPay_Backend.Controllers
 			}
 			else
 			{
-				_context.WorkInfos.Remove(workInfo);
+				if (workInfo != null)
+				{
+					_context.WorkInfos.Remove(workInfo);
+				}
 			}
 
 			await _context.SaveChangesAsync();
