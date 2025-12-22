@@ -34,7 +34,6 @@ namespace ShiftPay_Backend.Controllers
 			// Cosmos: WorkInfo partition key is (UserId, Workplace). Constrain to the UserId partition.
 			var workInfos = await _context.WorkInfos
 				.WithPartitionKey(userId)
-				.Where(wi => wi.UserId == userId)
 				.ToListAsync();
 
 			return Ok(workInfos.Select(workInfo => workInfo.ToDTO()));
@@ -93,7 +92,7 @@ namespace ShiftPay_Backend.Controllers
 			_context.WorkInfos.Update(workInfo);
 			await _context.SaveChangesAsync();
 
-			return CreatedAtAction(nameof(GetWorkInfo), new { workplace = workInfo.Workplace }, workInfo.ToDTO());
+			return Ok(workInfo.ToDTO());
 		}
 
 		// DELETE: api/WorkInfos/KFC

@@ -131,7 +131,7 @@ public sealed class WorkInfoControllerTests(ShiftPayTestFixture fixture) : IClas
         };
 
         var postResponse = await _client.PostAsJsonAsync("/api/WorkInfos", update);
-        Assert.Equal(HttpStatusCode.Created, postResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
 
         var returned = await ReadJsonAsync<WorkInfoDTO>(postResponse);
 
