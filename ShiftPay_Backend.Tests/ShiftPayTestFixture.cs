@@ -239,7 +239,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
 
                 var existing = await _context.WorkInfos
                     .WithPartitionKey(workInfo.UserId, workInfo.Workplace)
-                    .FirstOrDefaultAsync(wi => wi.Workplace == workInfo.Workplace);
+                    .FirstOrDefaultAsync();
 
                 if (existing is not null)
                 {

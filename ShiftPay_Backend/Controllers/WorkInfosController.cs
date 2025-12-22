@@ -49,10 +49,9 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			// Cosmos: WorkInfo uses a composite partition key (UserId, Workplace)
 			var workInfo = await _context.WorkInfos
 				.WithPartitionKey(userId, workplace)
-				.FirstOrDefaultAsync(wi => wi.UserId == userId && wi.Workplace == workplace);
+				.FirstOrDefaultAsync();
 
 			if (workInfo == null)
 			{
@@ -77,7 +76,7 @@ namespace ShiftPay_Backend.Controllers
 			// Cosmos: WorkInfo uses a composite partition key (UserId, Workplace)
 			var workInfo = await _context.WorkInfos
 				.WithPartitionKey(userId, workInfoDto.Workplace)
-				.FirstOrDefaultAsync(wi => wi.UserId == userId && wi.Workplace == workInfoDto.Workplace);
+				.FirstOrDefaultAsync();
 
 			if (workInfo == null)
 			{
@@ -108,7 +107,7 @@ namespace ShiftPay_Backend.Controllers
 			// Cosmos: WorkInfo uses a composite partition key (UserId, Workplace)
 			var workInfo = await _context.WorkInfos
 				.WithPartitionKey(userId, workplace)
-				.FirstOrDefaultAsync(wi => wi.UserId == userId && wi.Workplace == workplace);
+				.FirstOrDefaultAsync();
 
 			if (payRate.HasValue)
 			{

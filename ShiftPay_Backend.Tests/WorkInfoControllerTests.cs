@@ -122,7 +122,7 @@ public sealed class WorkInfoControllerTests(ShiftPayTestFixture fixture) : IClas
     }
 
     [Fact]
-    public async Task PostWorkInfo_ExistingWorkplace_UnionsPayRates_ReturnsCreated()
+    public async Task PostWorkInfo_ExistingWorkplace_UnionsPayRates_ReturnsOk()
     {
         var update = new WorkInfoDTO
         {
