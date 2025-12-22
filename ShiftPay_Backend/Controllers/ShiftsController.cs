@@ -89,7 +89,7 @@ namespace ShiftPay_Backend.Controllers
             }
 
             // To get YearMonth and Day from the DTO
-            var receivedShift = Shift.FromDTO(receivedShiftDTO);
+            var receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
 
             var partitionChanged =
                 existingShift.YearMonth != receivedShift.YearMonth ||
@@ -150,9 +150,8 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var receivedShift = Shift.FromDTO(receivedShiftDTO);
+            var receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
             receivedShift.Id = Guid.NewGuid(); // Generate a new ID for the shift
-            receivedShift.UserId = userId; // Set the UserId to the current user's ID
 
             _context.Shifts.Add(receivedShift);
 
@@ -191,9 +190,8 @@ namespace ShiftPay_Backend.Controllers
 
             var receivedShifts = receivedShiftDTOs.Select(shiftDTO =>
             {
-                var shift = Shift.FromDTO(shiftDTO);
+                var shift = Shift.FromDTO(shiftDTO, userId);
                 shift.Id = Guid.NewGuid(); // Generate a new ID for the shift
-                shift.UserId = userId; // Set the UserId to the current user's ID
                 return shift;
             }).ToList();
 
