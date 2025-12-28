@@ -19,10 +19,10 @@ namespace ShiftPay_Backend.Data
                 .ToContainer("Shifts")
                 .HasPartitionKey(e => new { e.UserId, e.YearMonth, e.Day });
 
-            modelBuilder.Entity<WorkInfo>()
-                .ToContainer("WorkInfos")
-                .HasPartitionKey(e => new { e.UserId, e.Workplace });
-        }
+			modelBuilder.Entity<WorkInfo>()
+				.ToContainer("WorkInfos")
+				.HasPartitionKey(e => new { e.UserId });
+		}
 
         public DbSet<Shift> Shifts { get; set; } = default!;
         public DbSet<WorkInfo> WorkInfos { get; set; } = default!;
