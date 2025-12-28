@@ -151,7 +151,8 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             },
         };
 
-        foreach (var shift in testShifts)
+		// Insert with conflict handling, since Cosmos may report conflicts if prior test runs left data.
+		foreach (var shift in testShifts)
         {
             try
             {
@@ -226,7 +227,8 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             },
         };
 
-        foreach (var workInfo in testWorkInfos)
+		// Insert with conflict handling, similar to shifts.
+		foreach (var workInfo in testWorkInfos)
         {
             try
             {
@@ -238,8 +240,8 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
                 _context.ChangeTracker.Clear();
 
                 var existing = await _context.WorkInfos
-                    .WithPartitionKey(workInfo.UserId, workInfo.Workplace)
-                    .FirstOrDefaultAsync();
+                    .WithPartitionKey(workInfo.UserId)
+                    .FirstOrDefaultAsync(w => w.Workplace == workInfo.Workplace);
 
                 if (existing is not null)
                 {

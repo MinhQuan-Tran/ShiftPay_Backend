@@ -5,7 +5,7 @@ namespace ShiftPay_Backend.Models
     public class Shift
     {
         [JsonProperty(PropertyName = "id")]
-        public Guid Id { get; set; } = Guid.NewGuid();
+        public required Guid Id { get; set; } = Guid.NewGuid();
 
         public string UserId { get; set; } = string.Empty; // Partition Key 1
 
