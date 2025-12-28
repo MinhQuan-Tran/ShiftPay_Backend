@@ -21,7 +21,7 @@ namespace ShiftPay_Backend.Data
 
 			modelBuilder.Entity<WorkInfo>()
 				.ToContainer("WorkInfos")
-				.HasPartitionKey(e => new { e.UserId });
+				.HasPartitionKey(e => e.UserId);
 		}
 
         public DbSet<Shift> Shifts { get; set; } = default!;
