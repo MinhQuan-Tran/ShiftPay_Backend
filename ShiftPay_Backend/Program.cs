@@ -26,14 +26,23 @@ if (builder.Environment.IsProduction())
 
 // Cosmos DB
 builder.Services.AddDbContext<ShiftPay_BackendContext>(options =>
+{
+    var endpoint = builder.Configuration["Cosmos:Endpoint"];
+    var key = builder.Configuration["Cosmos:Key"];
+    var databaseName = builder.Configuration["Cosmos:DatabaseName"] ?? builder.Configuration["DatabaseName"];
+
+    if (!string.IsNullOrWhiteSpace(endpoint) && !string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(databaseName))
+    {
+        options.UseCosmos(endpoint, key, databaseName);
+        return;
+    }
+
     options.UseCosmos(
         builder.Configuration["CosmosDB-ConnectionString-Primary"] ??
         builder.Configuration["CosmosDB-ConnectionString-Secondary"] ??
         throw new InvalidOperationException("Connection string not found."),
-        builder.Configuration["DatabaseName"] ??
-        throw new InvalidOperationException("Database name not found.")
-    )
-);
+        databaseName ?? throw new InvalidOperationException("Database name not found."));
+});
 
 builder.AddServiceDefaults();
 

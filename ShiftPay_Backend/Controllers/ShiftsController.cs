@@ -89,7 +89,15 @@ namespace ShiftPay_Backend.Controllers
             }
 
             // To get YearMonth and Day from the DTO
-            var receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
+            Shift receivedShift;
+            try
+            {
+                receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
 
             var partitionChanged =
                 existingShift.YearMonth != receivedShift.YearMonth ||
@@ -118,6 +126,15 @@ namespace ShiftPay_Backend.Controllers
                 existingShift.StartTime = receivedShift.StartTime;
                 existingShift.EndTime = receivedShift.EndTime;
                 existingShift.UnpaidBreaks = receivedShift.UnpaidBreaks;
+
+                try
+                {
+                    existingShift.Validate();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(ex.Message);
+                }
 
                 entry = _context.Shifts.Update(existingShift);
             }
@@ -150,7 +167,16 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
+            Shift receivedShift;
+            try
+            {
+                receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
             receivedShift.Id = Guid.NewGuid(); // Generate a new ID for the shift
 
             _context.Shifts.Add(receivedShift);
@@ -188,12 +214,20 @@ namespace ShiftPay_Backend.Controllers
                 return Unauthorized("User ID is missing.");
             }
 
-            var receivedShifts = receivedShiftDTOs.Select(shiftDTO =>
+            List<Shift> receivedShifts;
+            try
             {
-                var shift = Shift.FromDTO(shiftDTO, userId);
-                shift.Id = Guid.NewGuid(); // Generate a new ID for the shift
-                return shift;
-            }).ToList();
+                receivedShifts = receivedShiftDTOs.Select(shiftDTO =>
+                {
+                    var shift = Shift.FromDTO(shiftDTO, userId);
+                    shift.Id = Guid.NewGuid(); // Generate a new ID for the shift
+                    return shift;
+                }).ToList();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
 
             _context.Shifts.AddRange(receivedShifts);
 

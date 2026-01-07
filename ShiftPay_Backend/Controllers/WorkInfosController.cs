@@ -48,9 +48,20 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			var workInfo = await _context.WorkInfos
-				.WithPartitionKey(userId)
-				.FirstOrDefaultAsync(workInfo => workInfo.Workplace == workplace);
+			string id;
+			try
+			{
+				id = WorkInfo.CreateId(workplace);
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+
+			// https://learn.microsoft.com/en-us/azure/cosmos-db/optimize-cost-reads-writes
+			// https://learn.microsoft.com/en-us/ef/core/providers/cosmos/querying#findasync
+			// Cosmos point-read: (id, partitionKey)
+			var workInfo = await _context.WorkInfos.FindAsync(id, userId);
 
 			if (workInfo == null)
 			{
@@ -72,13 +83,31 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			var workInfo = await _context.WorkInfos
-				.WithPartitionKey(userId)
-				.FirstOrDefaultAsync(workInfo => workInfo.Workplace == workInfoDto.Workplace);
+			string id;
+			try
+			{
+				id = WorkInfo.CreateId(workInfoDto.Workplace);
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+
+
+			// Cosmos point-read: (partitionKey, id)
+			var workInfo = await _context.WorkInfos.FindAsync(id, userId);
 
 			if (workInfo == null)
 			{
-				workInfo = WorkInfo.FromDTO(workInfoDto, userId);
+				try
+				{
+					workInfo = WorkInfo.FromDTO(workInfoDto, userId);
+				}
+				catch (InvalidOperationException ex)
+				{
+					return BadRequest(ex.Message);
+				}
+
 				_context.WorkInfos.Add(workInfo);
 				await _context.SaveChangesAsync();
 				return CreatedAtAction(nameof(GetWorkInfo), new { workplace = workInfo.Workplace }, workInfo.ToDTO());
@@ -86,7 +115,15 @@ namespace ShiftPay_Backend.Controllers
 
 			workInfo.PayRates = workInfo.PayRates.Union(workInfoDto.PayRates).ToHashSet().ToList();
 
-			_context.WorkInfos.Update(workInfo);
+			try
+			{
+				workInfo.Validate();
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+
 			await _context.SaveChangesAsync();
 
 			return Ok(workInfo.ToDTO());
@@ -102,9 +139,18 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			var workInfo = await _context.WorkInfos
-				.WithPartitionKey(userId)
-				.FirstOrDefaultAsync(workInfo => workInfo.Workplace == workplace);
+			string id;
+			try
+			{
+				id = WorkInfo.CreateId(workplace);
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+
+			// Cosmos point-read: (id, partitionKey)
+			var workInfo = await _context.WorkInfos.FindAsync(id, userId);
 
 			if (payRate.HasValue)
 			{
@@ -116,7 +162,6 @@ namespace ShiftPay_Backend.Controllers
 				if (workInfo.PayRates.Contains(payRate.Value))
 				{
 					workInfo.PayRates.Remove(payRate.Value);
-					_context.WorkInfos.Update(workInfo);
 				}
 
 				// If not found, do nothing

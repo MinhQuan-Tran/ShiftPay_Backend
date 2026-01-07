@@ -98,6 +98,18 @@ public sealed class WorkInfoControllerTests(ShiftPayTestFixture fixture) : IClas
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Theory]
+	[InlineData("%20%20KFC")] // Leading spaces
+	[InlineData("KFC%20%20")] // Trailing spaces
+	public async Task GetWorkInfo_ByWorkplace_WithLeadingOrTrailingSpaces_ReturnsCorrectWorkInfo(string workplace)
+    {
+        var response = await _client.GetAsync($"/api/WorkInfos/{workplace}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var workInfoDTO = await ReadJsonAsync<WorkInfoDTO>(response);
+        Assert.Equal("KFC", workInfoDTO.Workplace);
+    }
+
     // POST
     [Fact]
     public async Task PostWorkInfo_NewWorkplace_ReturnsCreated_AndCanBeRetrieved()
@@ -146,6 +158,22 @@ public sealed class WorkInfoControllerTests(ShiftPayTestFixture fixture) : IClas
         Assert.Contains(25m, fetched.PayRates);
         Assert.Contains(30m, fetched.PayRates);
         Assert.Contains(35m, fetched.PayRates);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("   ")]
+    public async Task PostWorkInfo_WithEmptyOrWhitespaceWorkplace_ReturnsBadRequest(string workplace)
+    {
+        var payload = new WorkInfoDTO
+        {
+            Workplace = workplace,
+            PayRates = [42m],
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/WorkInfos", payload);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

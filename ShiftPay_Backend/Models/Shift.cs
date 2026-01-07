@@ -7,15 +7,23 @@ namespace ShiftPay_Backend.Models
         [JsonProperty(PropertyName = "id")]
         public required Guid Id { get; set; } = Guid.NewGuid();
 
-        public string UserId { get; set; } = string.Empty; // Partition Key 1
+        public required string UserId { get; set; } // Partition Key 1
 
         public string YearMonth { get; private set; } = string.Empty; // Partition Key 2
 
         public int Day { get; private set; } // Partition Key 3
 
-        public required string Workplace { get; set; }
+		public required string Workplace
+		{
+			get;
+			set
+			{
+				ArgumentException.ThrowIfNullOrWhiteSpace(value);
+				field = value.Trim();
+			}
+		}
 
-        public required decimal PayRate { get; set; }
+		public required decimal PayRate { get; set; }
 
         private DateTime _startTime;
         public required DateTime StartTime
@@ -25,12 +33,7 @@ namespace ShiftPay_Backend.Models
             {
                 if (value == default)
                 {
-                    throw new ArgumentException("StartTime cannot be default value.");
-                }
-
-                if (EndTime != default && value > EndTime)
-                {
-                    throw new ArgumentException($"StartTime cannot be greater than EndTime. value: {value}. EndTime: {EndTime}");
+                    throw new ArgumentException("StartTime cannot be default value.", nameof(StartTime));
                 }
 
                 _startTime = value;
@@ -47,12 +50,7 @@ namespace ShiftPay_Backend.Models
             {
                 if (value == default)
                 {
-                    throw new ArgumentException("EndTime cannot be default value.");
-                }
-
-                if (StartTime != default && value < StartTime)
-                {
-                    throw new ArgumentException("EndTime cannot be less than StartTime.");
+                    throw new ArgumentException("EndTime cannot be default value.", nameof(EndTime));
                 }
 
                 _endTime = value;
@@ -61,12 +59,58 @@ namespace ShiftPay_Backend.Models
 
         public List<TimeSpan> UnpaidBreaks { get; set; } = new List<TimeSpan>();
 
+        /// <summary>
+        /// Validates that the shift has valid state (StartTime before EndTime, valid breaks, etc.)
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when the shift is in an invalid state</exception>
+        public void Validate()
+        {
+            if (StartTime == default)
+            {
+                throw new InvalidOperationException("StartTime cannot be default value.");
+            }
+
+            if (EndTime == default)
+            {
+                throw new InvalidOperationException("EndTime cannot be default value.");
+            }
+
+            if (StartTime >= EndTime)
+            {
+                throw new InvalidOperationException($"StartTime must be before EndTime. StartTime: {StartTime}, EndTime: {EndTime}");
+            }
+
+            if (PayRate < 0)
+            {
+                throw new InvalidOperationException("PayRate cannot be negative.");
+            }
+
+            if (UnpaidBreaks != null)
+            {
+                foreach (var unpaidBreak in UnpaidBreaks)
+                {
+                    if (unpaidBreak < TimeSpan.Zero)
+                    {
+                        throw new InvalidOperationException("UnpaidBreaks cannot contain negative time spans.");
+                    }
+                }
+
+                var totalBreakTime = UnpaidBreaks.Aggregate(TimeSpan.Zero, (sum, brk) => sum + brk);
+                var shiftDuration = EndTime - StartTime;
+
+                if (totalBreakTime >= shiftDuration)
+                {
+                    throw new InvalidOperationException($"Total unpaid breaks ({totalBreakTime}) cannot be greater than or equal to shift duration ({shiftDuration}).");
+                }
+            }
+        }
+
         public ShiftDTO ToDTO()
         {
             return new ShiftDTO
             {
                 Id = Id,
-                Workplace = Workplace,
+				Workplace = Workplace,
                 PayRate = PayRate,
                 StartTime = StartTime,
                 EndTime = EndTime,
@@ -76,7 +120,7 @@ namespace ShiftPay_Backend.Models
 
         public static Shift FromDTO(ShiftDTO dto, string userId)
         {
-            return new Shift
+            var shift = new Shift
             {
                 Id = dto.Id ?? Guid.NewGuid(),
                 UserId = userId,
@@ -86,6 +130,9 @@ namespace ShiftPay_Backend.Models
                 EndTime = dto.EndTime,
                 UnpaidBreaks = dto.UnpaidBreaks ?? new List<TimeSpan>()
             };
+
+            shift.Validate();
+            return shift;
         }
     }
 

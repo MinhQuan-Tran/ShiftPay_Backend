@@ -2,42 +2,83 @@
 
 namespace ShiftPay_Backend.Models
 {
-    public class WorkInfo
-    {
-        [JsonProperty(PropertyName = "id")]
-        public required Guid Id { get; set; } = Guid.NewGuid();
+	public class WorkInfo
+	{
+		[JsonProperty(PropertyName = "id")]
+		public required string Id { get; set; } // From Workplace, will be created via CreateId() in FromDTO() only
 
-        public required string UserId { get; set; } // Partition Key
+		public required string UserId { get; set; } // Partition Key
 
-        public required string Workplace { get; set; } // Unique Key (per UserId)
+		public required string Workplace // Unique Key (per UserId), no updates allowed
+		{
+			get;
+			set
+			{
+				ArgumentException.ThrowIfNullOrWhiteSpace(value);
+				field = value.Trim();
+			}
+		}
 
-        public List<decimal> PayRates { get; set; } = new List<decimal>();
 
-        public WorkInfoDTO ToDTO()
-        {
-            return new WorkInfoDTO
-            {
-                Workplace = this.Workplace,
-                PayRates = new List<decimal>(this.PayRates)
-            };
-        }
+		public List<decimal> PayRates { get; set; } = new List<decimal>();
 
-        public static WorkInfo FromDTO(WorkInfoDTO dto, string userId)
-        {
-            return new WorkInfo
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                Workplace = dto.Workplace,
-                PayRates = new List<decimal>(dto.PayRates)
-            };
-        }
-    }
+		/// <summary>
+		/// Validates that the work info has valid state (non-negative pay rates, valid workplace, etc.)
+		/// </summary>
+		/// <exception cref="InvalidOperationException">Thrown when the work info is in an invalid state</exception>
+		public void Validate()
+		{
+			if (string.IsNullOrWhiteSpace(Workplace))
+			{
+				throw new InvalidOperationException("Workplace cannot be empty or whitespace.");
+			}
 
-    public class WorkInfoDTO
-    {
-        public required string Workplace { get; set; }
+			if (PayRates != null)
+			{
+				foreach (var payRate in PayRates)
+				{
+					if (payRate < 0)
+					{
+						throw new InvalidOperationException($"PayRate cannot be negative. Found: {payRate}");
+					}
+				}
+			}
+		}
 
-        public List<decimal> PayRates { get; set; } = new List<decimal>();
-    }
+		public WorkInfoDTO ToDTO()
+		{
+			return new WorkInfoDTO
+			{
+				Workplace = this.Workplace,
+				PayRates = new List<decimal>(this.PayRates)
+			};
+		}
+
+		public static WorkInfo FromDTO(WorkInfoDTO dto, string userId)
+		{
+			var workInfo = new WorkInfo
+			{
+				Id = CreateId(dto.Workplace),
+				UserId = userId,
+				Workplace = dto.Workplace,
+				PayRates = new List<decimal>(dto.PayRates)
+			};
+
+			workInfo.Validate();
+			return workInfo;
+		}
+
+		public static string CreateId(string workplace)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(workplace);
+			return workplace.Trim();
+		}
+	}
+
+	public class WorkInfoDTO
+	{
+		public required string Workplace { get; set => field = value.Trim(); }
+
+		public List<decimal> PayRates { get; set; } = new List<decimal>();
+	}
 }
