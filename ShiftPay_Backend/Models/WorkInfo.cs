@@ -33,12 +33,9 @@ namespace ShiftPay_Backend.Models
 				throw new InvalidOperationException("Workplace cannot be empty or whitespace.");
 			}
 
-			if (PayRates != null)
+			if (PayRates != null && PayRates.Any(payRate => payRate < 0))
 			{
-				if (PayRates.Any(payRate => payRate < 0))
-				{
-					throw new InvalidOperationException("PayRates cannot contain negative values.");
-				}
+				throw new InvalidOperationException("PayRates cannot contain negative values.");
 			}
 		}
 

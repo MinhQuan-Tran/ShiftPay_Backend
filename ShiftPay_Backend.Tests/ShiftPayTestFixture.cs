@@ -84,7 +84,6 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
 			// Database did not exist; this is expected during test setup, so we can safely ignore this exception.
-			_ = ex;
 		}
 
         var db = await cosmosClient.CreateDatabaseIfNotExistsAsync(databaseName);
@@ -257,7 +256,6 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             {
                 _context.ChangeTracker.Clear();
 
-                // Shifts now partition only by UserId.
                 var existing = await _context.Shifts
                     .WithPartitionKey(shift.UserId)
                     .FirstOrDefaultAsync(s => s.Id == shift.Id);
