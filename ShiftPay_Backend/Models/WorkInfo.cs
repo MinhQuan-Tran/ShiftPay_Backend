@@ -35,12 +35,9 @@ namespace ShiftPay_Backend.Models
 
 			if (PayRates != null)
 			{
-				foreach (var payRate in PayRates)
+				if (PayRates.Any(payRate => payRate < 0))
 				{
-					if (payRate < 0)
-					{
-						throw new InvalidOperationException($"PayRate cannot be negative. Found: {payRate}");
-					}
+					throw new InvalidOperationException("PayRates cannot contain negative values.");
 				}
 			}
 		}

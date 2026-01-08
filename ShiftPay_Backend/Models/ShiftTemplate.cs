@@ -60,10 +60,6 @@
 
 		public List<TimeSpan> UnpaidBreaks { get; set; } = new List<TimeSpan>();
 
-		/// <summary>
-		/// Validates that the shift template has valid state (StartTime before EndTime, valid breaks, etc.)
-		/// </summary>
-		/// <exception cref="InvalidOperationException">Thrown when the template is in an invalid state</exception>
 		public void Validate()
 		{
 			if (StartTime == default)
@@ -88,12 +84,9 @@
 
 			if (UnpaidBreaks != null)
 			{
-				foreach (var unpaidBreak in UnpaidBreaks)
+				if (UnpaidBreaks.Any(brk => brk < TimeSpan.Zero))
 				{
-					if (unpaidBreak < TimeSpan.Zero)
-					{
-						throw new InvalidOperationException("UnpaidBreaks cannot contain negative time spans.");
-					}
+					throw new InvalidOperationException("UnpaidBreaks cannot contain negative time spans.");
 				}
 
 				var totalBreakTime = UnpaidBreaks.Aggregate(TimeSpan.Zero, (sum, brk) => sum + brk);
@@ -106,7 +99,7 @@
 			}
 		}
 
-		public ShiftTemplateDTO toDTO()
+		public ShiftTemplateDTO ToDTO()
 		{
 			return new ShiftTemplateDTO
 			{
@@ -139,8 +132,21 @@
 		}
 	}
 
-	public class ShiftTemplateDTO : ShiftDTO
+	public class ShiftTemplateDTO
 	{
+		public Guid? Id { get; set; }
+
+		// No exception here since DTOs are just data carriers
 		public required string TemplateName { get; set => field = value.Trim(); }
+
+		public required string Workplace { get; set => field = value.Trim(); }
+
+		public required decimal PayRate { get; set; }
+
+		public required DateTime StartTime { get; set; }
+
+		public required DateTime EndTime { get; set; }
+
+		public required List<TimeSpan> UnpaidBreaks { get; set; }
 	}
 }

@@ -83,7 +83,9 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
-        }
+			// Database did not exist; this is expected during test setup, so we can safely ignore this exception.
+			_ = ex;
+		}
 
         var db = await cosmosClient.CreateDatabaseIfNotExistsAsync(databaseName);
 
@@ -426,7 +428,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
         }
 
         TestDataShiftTemplates.Clear();
-        TestDataShiftTemplates.AddRange(testShiftTemplates.Select(t => t.toDTO()));
+        TestDataShiftTemplates.AddRange(testShiftTemplates.Select(t => t.ToDTO()));
     }
 
 	public async Task DisposeAsync()

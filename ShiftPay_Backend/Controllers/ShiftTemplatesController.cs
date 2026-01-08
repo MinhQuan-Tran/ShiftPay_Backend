@@ -35,7 +35,7 @@ namespace ShiftPay_Backend.Controllers
 				.WithPartitionKey(userId)
 				.ToListAsync();
 
-			return Ok(shiftTemplates.Select(st => st.toDTO()));
+			return Ok(shiftTemplates.Select(st => st.ToDTO()));
 		}
 
 		// GET: api/ShiftTemplates/KFC-12345
@@ -58,7 +58,7 @@ namespace ShiftPay_Backend.Controllers
 				.WithPartitionKey(userId)
 				.FirstOrDefaultAsync(st => st.TemplateName == templateName);
 
-			return shiftTemplate != default ? Ok(shiftTemplate.toDTO()) : NotFound("No matching shift found.");
+			return shiftTemplate != default ? Ok(shiftTemplate.ToDTO()) : NotFound("No matching shift found.");
 		}
 
 		// PUT: api/ShiftTemplates/KFC-12345
@@ -102,7 +102,7 @@ namespace ShiftPay_Backend.Controllers
 			}
 
 			await _context.SaveChangesAsync();
-			return Ok(existingTemplate.toDTO());
+			return Ok(existingTemplate.ToDTO());
 		}
 
 		// POST: api/ShiftTemplates
@@ -138,7 +138,7 @@ namespace ShiftPay_Backend.Controllers
 				return Conflict();
 			}
 
-			return CreatedAtAction(nameof(GetShiftTemplate), new { templateName = receivedTemplate.TemplateName }, receivedTemplate.toDTO());
+			return CreatedAtAction(nameof(GetShiftTemplate), new { templateName = receivedTemplate.TemplateName }, receivedTemplate.ToDTO());
 		}
 
 		// DELETE: api/ShiftTemplates/KFC-12345

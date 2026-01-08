@@ -87,12 +87,9 @@ namespace ShiftPay_Backend.Models
 
             if (UnpaidBreaks != null)
             {
-                foreach (var unpaidBreak in UnpaidBreaks)
+                if (UnpaidBreaks.Any(brk => brk < TimeSpan.Zero))
                 {
-                    if (unpaidBreak < TimeSpan.Zero)
-                    {
-                        throw new InvalidOperationException("UnpaidBreaks cannot contain negative time spans.");
-                    }
+                    throw new InvalidOperationException("UnpaidBreaks cannot contain negative time spans.");
                 }
 
                 var totalBreakTime = UnpaidBreaks.Aggregate(TimeSpan.Zero, (sum, brk) => sum + brk);
@@ -140,7 +137,8 @@ namespace ShiftPay_Backend.Models
     {
         public Guid? Id { get; set; }
 
-        public required string Workplace { get; set; }
+		// No exception here since DTOs are just data carriers
+		public required string Workplace { get; set => field = value.Trim(); }
 
         public required decimal PayRate { get; set; }
 
