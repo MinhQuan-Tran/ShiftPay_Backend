@@ -16,15 +16,20 @@ namespace ShiftPay_Backend.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Shift>()
-                .ToContainer("Shifts")
+				.ToContainer("Shifts")
                 .HasPartitionKey(e => new { e.UserId, e.YearMonth, e.Day });
 
 			modelBuilder.Entity<WorkInfo>()
 				.ToContainer("WorkInfos")
 				.HasPartitionKey(e => e.UserId);
+
+			modelBuilder.Entity<ShiftTemplate>()
+				.ToContainer("ShiftTemplates")
+				.HasPartitionKey(e => e.UserId);
 		}
 
         public DbSet<Shift> Shifts { get; set; } = default!;
         public DbSet<WorkInfo> WorkInfos { get; set; } = default!;
-    }
+		public DbSet<ShiftTemplate> ShiftTemplates { get; set; } = default!;
+	}
 }
