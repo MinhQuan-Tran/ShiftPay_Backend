@@ -28,7 +28,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
 
     private DistributedApplication _app = null!;
     private IServiceProvider _provider = null!;
-	private ShiftPay_BackendContext _context = null!;
+    private ShiftPay_BackendContext _context = null!;
 
     private static readonly SemaphoreSlim _dbLock = new(1, 1);
 
@@ -179,7 +179,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
 
     public async Task ClearAllWorkInfosAsync() => await ClearAllAsync(_context.WorkInfos, _context);
 
-	public async Task ClearAllShiftTemplatesAsync() => await ClearAllAsync(_context.ShiftTemplates, _context);
+    public async Task ClearAllShiftTemplatesAsync() => await ClearAllAsync(_context.ShiftTemplates, _context);
 
     public async Task SeedShiftTestDataAsync()
     {
@@ -240,8 +240,8 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             },
         };
 
-		// Insert with conflict handling, since Cosmos may report conflicts if prior test runs left data.
-		foreach (var shift in testShifts)
+        // Insert with conflict handling, since Cosmos may report conflicts if prior test runs left data.
+        foreach (var shift in testShifts)
         {
             try
             {
@@ -313,8 +313,8 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             },
         };
 
-		// Insert with conflict handling, similar to shifts.
-		foreach (var workInfo in testWorkInfos)
+        // Insert with conflict handling, similar to shifts.
+        foreach (var workInfo in testWorkInfos)
         {
             try
             {
@@ -425,20 +425,20 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
         TestDataShiftTemplates.AddRange(testShiftTemplates.Select(t => t.ToDTO()));
     }
 
-	public async Task DisposeAsync()
+    public async Task DisposeAsync()
     {
         if (_app is not null)
         {
             await _app.DisposeAsync();
         }
 
-		if (_provider is IAsyncDisposable asyncDisposable)
-		{
-			await asyncDisposable.DisposeAsync();
-		}
-		else if (_provider is IDisposable disposable)
-		{
-			disposable.Dispose();
-		}
+        if (_provider is IAsyncDisposable asyncDisposable)
+        {
+            await asyncDisposable.DisposeAsync();
+        }
+        else if (_provider is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 }
