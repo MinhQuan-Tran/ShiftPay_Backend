@@ -141,41 +141,12 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             await SeedShiftTemplateTestDataAsync();
 
             // Create HTTP client with custom header for unique userId
-            var baseClient = _app.CreateHttpClient("shiftpay-backend", "https");
-            Client = new HttpClientWithUserId(baseClient, _testUserId);
+            Client = _app.CreateHttpClient("shiftpay-backend", "https");
+            Client.DefaultRequestHeaders.Add("X-Test-UserId", _testUserId);
         }
         finally
         {
             _dbLock.Release();
-        }
-    }
-
-    // Custom HttpClient that adds X-Test-UserId header to all requests
-    private class HttpClientWithUserId : HttpClient
-    {
-        private readonly HttpClient _baseClient;
-        private readonly string _userId;
-
-        public HttpClientWithUserId(HttpClient baseClient, string userId)
-        {
-            _baseClient = baseClient;
-            _userId = userId;
-            BaseAddress = baseClient.BaseAddress;
-            Timeout = baseClient.Timeout;
-            foreach (var header in baseClient.DefaultRequestHeaders)
-            {
-                DefaultRequestHeaders.TryAddWithoutValidation(header.Key, header.Value);
-            }
-            DefaultRequestHeaders.Add("X-Test-UserId", userId);
-        }
-
-        public override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (!request.Headers.Contains("X-Test-UserId"))
-            {
-                request.Headers.Add("X-Test-UserId", _userId);
-            }
-            return _baseClient.SendAsync(request, cancellationToken);
         }
     }
 
