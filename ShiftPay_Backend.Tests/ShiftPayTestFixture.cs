@@ -248,7 +248,9 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             },
         };
 
-        // Insert with conflict handling, since Cosmos may report conflicts if prior test runs left data.
+        // Insert with conflict handling for robustness during fixture initialization.
+        // With unique UserIds per fixture, conflicts should not occur between test runs.
+        // However, we handle conflicts defensively in case of repeated fixture initialization.
         foreach (var shift in testShifts)
         {
             try
@@ -321,7 +323,9 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             },
         };
 
-        // Insert with conflict handling, similar to shifts.
+        // Insert with conflict handling for robustness during fixture initialization.
+        // With unique UserIds per fixture, conflicts should not occur between test runs.
+        // However, we handle conflicts defensively in case of repeated fixture initialization.
         foreach (var workInfo in testWorkInfos)
         {
             try
