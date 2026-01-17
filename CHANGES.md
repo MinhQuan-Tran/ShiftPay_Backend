@@ -68,12 +68,11 @@ var userId = string.IsNullOrEmpty(userIdFromHeader) ? "test-user-id" : userIdFro
 {
   "Cosmos": {
     "DatabaseName": "ShiftPay_Test_Shared"
-  },
-  "Comments": {
-    "DatabaseName": "All tests share this database. Test isolation is achieved via unique UserId partition keys per test fixture instance."
   }
 }
 ```
+
+**Note:** The database name was changed to use a shared database. Test isolation is now achieved via unique UserId partition keys per test fixture instance, which is explained in the README.md documentation.
 
 ### 4. README.md (New)
 

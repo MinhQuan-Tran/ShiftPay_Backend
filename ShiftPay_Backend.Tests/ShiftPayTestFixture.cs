@@ -78,8 +78,16 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
 
         using var cosmosClient = new CosmosClient(endpoint, key);
 
-        // Create shared database and containers if they don't exist
-        // Do NOT delete the database - tests share the same database/containers
+        // Create shared database and containers if they don't exist.
+        // Key architectural decision: All tests share the same database and containers.
+        // Test isolation is achieved through partition keys - each test fixture instance
+        // uses a unique UserId (e.g., test-user-{guid}), and since all containers are
+        // partitioned by UserId, tests naturally operate in isolated partitions and
+        // cannot interfere with each other. This approach:
+        // - Eliminates database creation/deletion overhead
+        // - Mirrors production behavior (partition-based isolation)
+        // - Supports safe parallel test execution
+        // - Avoids orphaned databases from failed test runs
         var db = await cosmosClient.CreateDatabaseIfNotExistsAsync(databaseName);
 
         // These container names match `ShiftPay_BackendContext.OnModelCreating`.
