@@ -14,9 +14,13 @@ namespace ShiftPay_Backend.Auth
 
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
+            // Allow tests to override the userId via a custom header
+            var userIdFromHeader = Context.Request.Headers["X-Test-UserId"].FirstOrDefault();
+            var userId = string.IsNullOrEmpty(userIdFromHeader) ? "test-user-id" : userIdFromHeader;
+
             var claims = new[]
             {
-            new Claim(ClaimTypes.NameIdentifier, "test-user-id"),
+            new Claim(ClaimTypes.NameIdentifier, userId),
             new Claim(ClaimTypes.Name, "Test User")
         };
 

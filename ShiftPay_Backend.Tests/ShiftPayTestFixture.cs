@@ -19,6 +19,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
     public const string S7 = "00000000-0000-0000-0000-000000000007"; // Non-existent shift
 
     private const string CosmosDatabaseNameEnvVar = "Cosmos__DatabaseName";
+    private const string SharedTestDatabaseName = "ShiftPay_Test_Shared";
 
     public HttpClient Client { get; private set; } = null!;
     public List<ShiftDTO> TestDataShifts { get; } = new();
@@ -31,7 +32,9 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
 
     private static readonly SemaphoreSlim _dbLock = new(1, 1);
 
-    private readonly string _cosmosDatabaseName = $"ShiftPay_Test_{Guid.NewGuid():N}";
+    // Use unique UserId per fixture instance for test isolation
+    private readonly string _testUserId = $"test-user-{Guid.NewGuid():N}";
+    private readonly string _testUserIdOther = $"test-user-other-{Guid.NewGuid():N}";
 
     private static IServiceProvider CreateServiceProvider()
     {
@@ -75,17 +78,8 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
 
         using var cosmosClient = new CosmosClient(endpoint, key);
 
-        // For tests we want a clean schema-aligned database each run.
-        var existingDb = cosmosClient.GetDatabase(databaseName);
-        try
-        {
-            await existingDb.DeleteAsync();
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-			// Database did not exist; this is expected during test setup, so we can safely ignore this exception.
-		}
-
+        // Create shared database and containers if they don't exist
+        // Do NOT delete the database - tests share the same database/containers
         var db = await cosmosClient.CreateDatabaseIfNotExistsAsync(databaseName);
 
         // These container names match `ShiftPay_BackendContext.OnModelCreating`.
@@ -123,8 +117,8 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
         {
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
 
-            // Per-test-run database to prevent cross-process/run contamination.
-            Environment.SetEnvironmentVariable(CosmosDatabaseNameEnvVar, _cosmosDatabaseName);
+            // Use shared database for all tests
+            Environment.SetEnvironmentVariable(CosmosDatabaseNameEnvVar, SharedTestDatabaseName);
 
             // Provision the database/containers before app and seeding use them.
             var bootstrapConfig = new ConfigurationBuilder()
@@ -146,11 +140,42 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             await SeedWorkInfoTestDataAsync();
             await SeedShiftTemplateTestDataAsync();
 
-            Client = _app.CreateHttpClient("shiftpay-backend", "https");
+            // Create HTTP client with custom header for unique userId
+            var baseClient = _app.CreateHttpClient("shiftpay-backend", "https");
+            Client = new HttpClientWithUserId(baseClient, _testUserId);
         }
         finally
         {
             _dbLock.Release();
+        }
+    }
+
+    // Custom HttpClient that adds X-Test-UserId header to all requests
+    private class HttpClientWithUserId : HttpClient
+    {
+        private readonly HttpClient _baseClient;
+        private readonly string _userId;
+
+        public HttpClientWithUserId(HttpClient baseClient, string userId)
+        {
+            _baseClient = baseClient;
+            _userId = userId;
+            BaseAddress = baseClient.BaseAddress;
+            Timeout = baseClient.Timeout;
+            foreach (var header in baseClient.DefaultRequestHeaders)
+            {
+                DefaultRequestHeaders.TryAddWithoutValidation(header.Key, header.Value);
+            }
+            DefaultRequestHeaders.Add("X-Test-UserId", userId);
+        }
+
+        public override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (!request.Headers.Contains("X-Test-UserId"))
+            {
+                request.Headers.Add("X-Test-UserId", _userId);
+            }
+            return _baseClient.SendAsync(request, cancellationToken);
         }
     }
 
@@ -195,7 +220,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse(S1),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 Workplace = "McDonald",
                 PayRate = 25,
                 StartTime = new DateTime(2023, 10, 15, 9, 0, 0, DateTimeKind.Utc),
@@ -205,7 +230,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse(S2),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 Workplace = "KFC",
                 PayRate = 30,
                 StartTime = new DateTime(2023, 10, 14, 8, 0, 0, DateTimeKind.Utc),
@@ -215,7 +240,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse(S3),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 Workplace = "Starbucks",
                 PayRate = 28,
                 StartTime = new DateTime(2023, 9, 15, 7, 0, 0, DateTimeKind.Utc),
@@ -225,7 +250,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse(S4),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 Workplace = "Burger King",
                 PayRate = 20,
                 StartTime = new DateTime(2022, 12, 25, 10, 0, 0, DateTimeKind.Utc),
@@ -235,7 +260,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse(S5),
-                UserId = "test-user-id-1",
+                UserId = _testUserIdOther,
                 Workplace = "Starbucks",
                 PayRate = 28,
                 StartTime = new DateTime(2023, 2, 15, 7, 0, 0, DateTimeKind.Utc),
@@ -297,21 +322,21 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = WorkInfo.CreateId("KFC"),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 Workplace = "KFC",
                 PayRates = [25m, 30m],
             },
             new()
             {
                 Id = WorkInfo.CreateId("McDonald"),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 Workplace = "McDonald",
                 PayRates = [20m],
             },
             new()
             {
                 Id = WorkInfo.CreateId("KFC"),
-                UserId = "test-user-id-1",
+                UserId = _testUserIdOther,
                 Workplace = "KFC",
                 PayRates = [99m],
             },
@@ -362,7 +387,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse("00000000-0000-0000-0000-000000000101"),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 TemplateName = "KFC-Open",
                 Workplace = "KFC",
                 PayRate = 30,
@@ -373,7 +398,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse("00000000-0000-0000-0000-000000000102"),
-                UserId = "test-user-id",
+                UserId = _testUserId,
                 TemplateName = "McDonald-Close",
                 Workplace = "McDonald",
                 PayRate = 25,
@@ -384,7 +409,7 @@ public sealed class ShiftPayTestFixture : IAsyncLifetime
             new()
             {
                 Id = Guid.Parse("00000000-0000-0000-0000-000000000103"),
-                UserId = "test-user-id-1",
+                UserId = _testUserIdOther,
                 TemplateName = "OtherUser-Template",
                 Workplace = "KFC",
                 PayRate = 99,
