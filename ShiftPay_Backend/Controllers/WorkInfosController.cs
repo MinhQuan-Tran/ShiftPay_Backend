@@ -42,6 +42,12 @@ namespace ShiftPay_Backend.Controllers
 		[HttpGet("{workplace}")]
 		public async Task<ActionResult<WorkInfoDTO>> GetWorkInfo(string workplace)
 		{
+			workplace = Uri.UnescapeDataString(workplace.Trim());
+			if (string.IsNullOrEmpty(workplace))
+			{
+				return BadRequest("Workplace cannot be empty.");
+			}
+
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			if (string.IsNullOrEmpty(userId))
 			{
@@ -103,7 +109,7 @@ namespace ShiftPay_Backend.Controllers
 				{
 					workInfo = WorkInfo.FromDTO(workInfoDto, userId);
 				}
-				catch (InvalidOperationException ex)
+				catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
 				{
 					return BadRequest(ex.Message);
 				}
@@ -133,6 +139,12 @@ namespace ShiftPay_Backend.Controllers
 		[HttpDelete("{workplace}")]
 		public async Task<IActionResult> DeleteWorkInfo(string workplace, decimal? payRate)
 		{
+			workplace = Uri.UnescapeDataString(workplace.Trim());
+			if (string.IsNullOrEmpty(workplace))
+			{
+				return BadRequest("Workplace cannot be empty.");
+			}
+
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			if (string.IsNullOrEmpty(userId))
 			{

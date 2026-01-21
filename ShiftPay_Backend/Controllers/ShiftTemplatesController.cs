@@ -42,7 +42,7 @@ namespace ShiftPay_Backend.Controllers
 		[HttpGet("{templateName}")]
 		public async Task<ActionResult<ShiftTemplateDTO>> GetShiftTemplate(string templateName)
 		{
-			templateName = templateName.Trim();
+			templateName = Uri.UnescapeDataString(templateName.Trim());
 			if (string.IsNullOrEmpty(templateName))
 			{
 				return BadRequest("Template name cannot be empty.");
@@ -61,50 +61,6 @@ namespace ShiftPay_Backend.Controllers
 			return shiftTemplate != default ? Ok(shiftTemplate.ToDTO()) : NotFound("No matching shift found.");
 		}
 
-		// PUT: api/ShiftTemplates/KFC-12345
-		[HttpPut("{templateName}")]
-		public async Task<ActionResult<ShiftTemplateDTO>> PutShiftTemplate(string templateName, ShiftTemplateDTO shiftTemplateDTO)
-		{
-			templateName = templateName.Trim();
-			if (string.IsNullOrEmpty(templateName))
-			{
-				return BadRequest("Template name cannot be empty.");
-			}
-
-			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-			if (string.IsNullOrEmpty(userId))
-			{
-				return Unauthorized("User ID is missing.");
-			}
-
-			var existingTemplate = await _context.ShiftTemplates
-				.WithPartitionKey(userId)
-				.FirstOrDefaultAsync(st => st.TemplateName == templateName);
-
-			if (existingTemplate == default)
-			{
-				return NotFound("No matching shift template found to update.");
-			}
-
-			existingTemplate.Workplace = shiftTemplateDTO.Workplace;
-			existingTemplate.PayRate = shiftTemplateDTO.PayRate;
-			existingTemplate.StartTime = shiftTemplateDTO.StartTime;
-			existingTemplate.EndTime = shiftTemplateDTO.EndTime;
-			existingTemplate.UnpaidBreaks = shiftTemplateDTO.UnpaidBreaks;
-
-			try
-			{
-				existingTemplate.Validate();
-			}
-			catch (InvalidOperationException ex)
-			{
-				return BadRequest(ex.Message);
-			}
-
-			await _context.SaveChangesAsync();
-			return Ok(existingTemplate.ToDTO());
-		}
-
 		// POST: api/ShiftTemplates
 		[HttpPost]
 		public async Task<ActionResult<ShiftTemplateDTO>> PostShiftTemplate(ShiftTemplateDTO receivedShiftTemplateDTO)
@@ -120,13 +76,37 @@ namespace ShiftPay_Backend.Controllers
 			{
 				receivedTemplate = ShiftTemplate.FromDTO(receivedShiftTemplateDTO, userId);
 			}
-			catch (InvalidOperationException ex)
+			catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
 			{
 				return BadRequest(ex.Message);
 			}
 
-			receivedTemplate.Id = Guid.NewGuid(); // Generate new ID for the template
+			var existingTemplate = await _context.ShiftTemplates
+				.WithPartitionKey(userId)
+				.FirstOrDefaultAsync(st => st.TemplateName == receivedTemplate.TemplateName);
 
+			if (existingTemplate != default)
+			{
+				existingTemplate.Workplace = receivedTemplate.Workplace;
+				existingTemplate.PayRate = receivedTemplate.PayRate;
+				existingTemplate.StartTime = receivedTemplate.StartTime;
+				existingTemplate.EndTime = receivedTemplate.EndTime;
+				existingTemplate.UnpaidBreaks = receivedTemplate.UnpaidBreaks;
+
+				try
+				{
+					existingTemplate.Validate();
+				}
+				catch (InvalidOperationException ex)
+				{
+					return BadRequest(ex.Message);
+				}
+
+				await _context.SaveChangesAsync();
+				return Ok(existingTemplate.ToDTO());
+			}
+
+			receivedTemplate.Id = Guid.NewGuid();
 			_context.ShiftTemplates.Add(receivedTemplate);
 
 			try
@@ -145,7 +125,7 @@ namespace ShiftPay_Backend.Controllers
 		[HttpDelete("{templateName}")]
 		public async Task<IActionResult> DeleteShiftTemplate(string templateName)
 		{
-			templateName = templateName.Trim();
+			templateName = Uri.UnescapeDataString(templateName.Trim());
 			if (string.IsNullOrEmpty(templateName))
 			{
 				return BadRequest("Template name cannot be empty.");
