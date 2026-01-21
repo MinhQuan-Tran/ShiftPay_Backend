@@ -94,7 +94,7 @@ namespace ShiftPay_Backend.Controllers
             {
                 receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
             }
-            catch (InvalidOperationException ex)
+            catch (ArgumentException ex)
             {
                 return BadRequest(ex.Message);
             }
@@ -172,7 +172,7 @@ namespace ShiftPay_Backend.Controllers
             {
                 receivedShift = Shift.FromDTO(receivedShiftDTO, userId);
             }
-            catch (InvalidOperationException ex)
+            catch (ArgumentException ex)
             {
                 return BadRequest(ex.Message);
             }
@@ -224,7 +224,7 @@ namespace ShiftPay_Backend.Controllers
                     return shift;
                 }).ToList();
             }
-            catch (InvalidOperationException ex)
+            catch (ArgumentException ex)
             {
                 return BadRequest(ex.Message);
             }
