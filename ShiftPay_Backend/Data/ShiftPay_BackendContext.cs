@@ -3,21 +3,22 @@ using ShiftPay_Backend.Models;
 
 namespace ShiftPay_Backend.Data
 {
-    public class ShiftPay_BackendContext : DbContext
-    {
-        private readonly IConfiguration _configuration;
+	public class ShiftPay_BackendContext : DbContext
+	{
+		private readonly IConfiguration _configuration;
 
-        public ShiftPay_BackendContext(DbContextOptions<ShiftPay_BackendContext> options, IConfiguration configuration)
-            : base(options)
-        {
-            _configuration = configuration;
-        }
+		public ShiftPay_BackendContext(DbContextOptions<ShiftPay_BackendContext> options, IConfiguration configuration)
+			: base(options)
+		{
+			_configuration = configuration;
+		}
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Shift>()
+		protected override void OnModelCreating(ModelBuilder modelBuilder)
+		{
+			modelBuilder.Entity<Shift>()
 				.ToContainer("Shifts")
-                .HasPartitionKey(e => new { e.UserId, e.YearMonth, e.Day });
+				.HasPartitionKey(e => new { e.UserId, e.YearMonth, e.Day })
+				.UseETagConcurrency();  // Enable optimistic concurrency with ETags
 
 			modelBuilder.Entity<WorkInfo>()
 				.ToContainer("WorkInfos")
@@ -28,8 +29,8 @@ namespace ShiftPay_Backend.Data
 				.HasPartitionKey(e => e.UserId);
 		}
 
-        public DbSet<Shift> Shifts { get; set; } = default!;
-        public DbSet<WorkInfo> WorkInfos { get; set; } = default!;
+		public DbSet<Shift> Shifts { get; set; } = default!;
+		public DbSet<WorkInfo> WorkInfos { get; set; } = default!;
 		public DbSet<ShiftTemplate> ShiftTemplates { get; set; } = default!;
 	}
 }
