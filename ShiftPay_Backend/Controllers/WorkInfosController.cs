@@ -109,7 +109,7 @@ namespace ShiftPay_Backend.Controllers
 				{
 					workInfo = WorkInfo.FromDTO(workInfoDto, userId);
 				}
-				catch (ArgumentException ex)
+				catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
 				{
 					return BadRequest(ex.Message);
 				}

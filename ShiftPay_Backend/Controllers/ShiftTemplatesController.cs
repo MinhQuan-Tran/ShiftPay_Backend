@@ -76,7 +76,7 @@ namespace ShiftPay_Backend.Controllers
 			{
 				receivedTemplate = ShiftTemplate.FromDTO(receivedShiftTemplateDTO, userId);
 			}
-			catch (ArgumentException ex)
+			catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
 			{
 				return BadRequest(ex.Message);
 			}
