@@ -647,111 +647,121 @@ public class ShiftsControllerTests : IAsyncLifetime
 		// Verify only Shift 3 remains
 		var remainingShifts = await controller.GetShifts(null, null, null, null, null, null);
 		var okResult = Assert.IsType<OkObjectResult>(remainingShifts.Result);
-        var shifts = Assert.IsAssignableFrom<IEnumerable<ShiftDTO>>(okResult.Value).ToList();
-        Assert.Single(shifts);
-        Assert.Equal("Shift 3", shifts[0].Workplace);
-    }
+		var shifts = Assert.IsAssignableFrom<IEnumerable<ShiftDTO>>(okResult.Value).ToList();
+		Assert.Single(shifts);
+		Assert.Equal("Shift 3", shifts[0].Workplace);
+	}
 
-    [Fact]
-    public async Task PutShift_WithConcurrentModification_ReturnsConflict()
-    {
-        // Arrange - Create a shift using context1
-        await using var context1 = _fixture.CreateContext();
-        var controller1 = ControllerTestHelper.CreateShiftsController(context1, _testUserId);
+	[Fact]
+	public async Task PutShift_WithConcurrentModification_ReturnsConflict()
+	{
+		// Arrange - Create a shift using context1
+		await using var context1 = _fixture.CreateContext();
+		var controller1 = ControllerTestHelper.CreateShiftsController(context1, _testUserId);
 
-        var originalShift = new ShiftDTO
-        {
-            Workplace = "Concurrency Test",
-            PayRate = 20.00m,
-            StartTime = new DateTime(2024, 12, 1, 9, 0, 0, DateTimeKind.Utc),
-            EndTime = new DateTime(2024, 12, 1, 17, 0, 0, DateTimeKind.Utc),
-            UnpaidBreaks = []
-        };
+		var originalShift = new ShiftDTO
+		{
+			Workplace = "Concurrency Test",
+			PayRate = 20.00m,
+			StartTime = new DateTime(2024, 12, 1, 9, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 12, 1, 17, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		};
 
-        var createResult = await controller1.PostShift(originalShift);
-        var createdShift = Assert.IsType<ShiftDTO>(Assert.IsType<CreatedAtActionResult>(createResult.Result).Value);
-        var shiftId = createdShift.Id!.Value;
+		var createResult = await controller1.PostShift(originalShift);
+		var createdShift = Assert.IsType<ShiftDTO>(Assert.IsType<CreatedAtActionResult>(createResult.Result).Value);
+		var shiftId = createdShift.Id!.Value;
 
-        // Load the entity in context1 to track it (simulating first user reading the data)
-        _ = await context1.Shifts.FindAsync(shiftId, _testUserId, createdShift.StartTime.ToString("yyyy-MM"), createdShift.StartTime.Day);
+		// Load and modify the entity in context1 to ensure it's tracked with current ETag
+		// This simulates a user loading data before another user modifies it
+		var trackedShift = await context1.Shifts.FindAsync(
+			shiftId, _testUserId,
+			createdShift.StartTime.ToString("yyyy-MM"),
+			createdShift.StartTime.Day);
+		Assert.NotNull(trackedShift);
 
-        // Modify and save using context2 (simulating another user updating first)
-        await using var context2 = _fixture.CreateContext();
-        var controller2 = ControllerTestHelper.CreateShiftsController(context2, _testUserId);
+		// Mark as modified so EF Core will use the tracked entity (with its ETag) on subsequent queries
+		trackedShift.Workplace = "Pending modification";
+		context1.Entry(trackedShift).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
 
-        var update2 = new ShiftDTO
-        {
-            Id = shiftId,
-            Workplace = "Updated by User 2",
-            PayRate = 25.00m,
-            StartTime = createdShift.StartTime,
-            EndTime = createdShift.EndTime,
-            UnpaidBreaks = []
-        };
+		// Modify and save using context2 (simulating another user updating first)
+		// This changes the ETag in Cosmos DB
+		await using var context2 = _fixture.CreateContext();
+		var controller2 = ControllerTestHelper.CreateShiftsController(context2, _testUserId);
 
-        var result2 = await controller2.PutShift(shiftId, update2);
-        Assert.IsType<OkObjectResult>(result2.Result); // User 2 succeeds
+		var update2 = new ShiftDTO
+		{
+			Id = shiftId,
+			Workplace = "Updated by User 2",
+			PayRate = 25.00m,
+			StartTime = createdShift.StartTime,
+			EndTime = createdShift.EndTime,
+			UnpaidBreaks = []
+		};
 
-        // Now try to update using context1 (has stale ETag)
-        // This should throw DbUpdateConcurrencyException because the ETag changed
-        var update1 = new ShiftDTO
-        {
-            Id = shiftId,
-            Workplace = "Updated by User 1",
-            PayRate = 30.00m,
-            StartTime = createdShift.StartTime,
-            EndTime = createdShift.EndTime,
-            UnpaidBreaks = []
-        };
+		var result2 = await controller2.PutShift(shiftId, update2);
+		Assert.IsType<OkObjectResult>(result2.Result); // User 2 succeeds, ETag changes in DB
 
-        // Act
-        var result1 = await controller1.PutShift(shiftId, update1);
+		// Now context1 has a tracked entity with stale ETag
+		// When PutShift's FilterShiftsAsync runs, it returns the tracked entity (with old ETag)
+		var update1 = new ShiftDTO
+		{
+			Id = shiftId,
+			Workplace = "Updated by User 1",
+			PayRate = 30.00m,
+			StartTime = createdShift.StartTime,
+			EndTime = createdShift.EndTime,
+			UnpaidBreaks = []
+		};
 
-        // Assert - Should return Conflict due to ETag mismatch
-        Assert.IsType<ConflictObjectResult>(result1.Result);
-    }
+		// Act - This should fail because context1's tracked entity has stale ETag
+		var result1 = await controller1.PutShift(shiftId, update1);
 
-    [Fact]
-    public async Task PutShift_WhenShiftDeletedDuringUpdate_ReturnsNotFound()
-    {
-        // Arrange
-        await using var context1 = _fixture.CreateContext();
-        var controller1 = ControllerTestHelper.CreateShiftsController(context1, _testUserId);
+		// Assert - Should return Conflict due to ETag mismatch
+		Assert.IsType<ConflictObjectResult>(result1.Result);
+	}
 
-        var originalShift = new ShiftDTO
-        {
-            Workplace = "Delete During Update Test",
-            PayRate = 20.00m,
-            StartTime = new DateTime(2024, 12, 5, 9, 0, 0, DateTimeKind.Utc),
-            EndTime = new DateTime(2024, 12, 5, 17, 0, 0, DateTimeKind.Utc),
-            UnpaidBreaks = []
-        };
+	[Fact]
+	public async Task PutShift_WhenShiftDeletedDuringUpdate_ReturnsNotFound()
+	{
+		// Arrange
+		await using var context1 = _fixture.CreateContext();
+		var controller1 = ControllerTestHelper.CreateShiftsController(context1, _testUserId);
 
-        var createResult = await controller1.PostShift(originalShift);
-        var createdShift = Assert.IsType<ShiftDTO>(Assert.IsType<CreatedAtActionResult>(createResult.Result).Value);
-        var shiftId = createdShift.Id!.Value;
+		var originalShift = new ShiftDTO
+		{
+			Workplace = "Delete During Update Test",
+			PayRate = 20.00m,
+			StartTime = new DateTime(2024, 12, 5, 9, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 12, 5, 17, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		};
 
-        // Delete using context2
-        await using var context2 = _fixture.CreateContext();
-        var controller2 = ControllerTestHelper.CreateShiftsController(context2, _testUserId);
-        var deleteResult = await controller2.DeleteShift(shiftId);
-        Assert.IsType<NoContentResult>(deleteResult);
+		var createResult = await controller1.PostShift(originalShift);
+		var createdShift = Assert.IsType<ShiftDTO>(Assert.IsType<CreatedAtActionResult>(createResult.Result).Value);
+		var shiftId = createdShift.Id!.Value;
 
-        // Now try to update the deleted shift using context1
-        var updateDto = new ShiftDTO
-        {
-            Id = shiftId,
-            Workplace = "Updated After Delete",
-            PayRate = 25.00m,
-            StartTime = createdShift.StartTime,
-            EndTime = createdShift.EndTime,
-            UnpaidBreaks = []
-        };
+		// Delete using context2
+		await using var context2 = _fixture.CreateContext();
+		var controller2 = ControllerTestHelper.CreateShiftsController(context2, _testUserId);
+		var deleteResult = await controller2.DeleteShift(shiftId);
+		Assert.IsType<NoContentResult>(deleteResult);
 
-        // Act
-        var result = await controller1.PutShift(shiftId, updateDto);
+		// Now try to update the deleted shift using context1
+		var updateDto = new ShiftDTO
+		{
+			Id = shiftId,
+			Workplace = "Updated After Delete",
+			PayRate = 25.00m,
+			StartTime = createdShift.StartTime,
+			EndTime = createdShift.EndTime,
+			UnpaidBreaks = []
+		};
 
-        // Assert - Should return NotFound since shift was deleted
-        Assert.IsType<NotFoundObjectResult>(result.Result);
-    }
+		// Act
+		var result = await controller1.PutShift(shiftId, updateDto);
+
+		// Assert - Should return NotFound since shift was deleted
+		Assert.IsType<NotFoundObjectResult>(result.Result);
+	}
 }

@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace ShiftPay_Backend.Models
 {
@@ -18,6 +19,7 @@ namespace ShiftPay_Backend.Models
 		/// This property is automatically managed by Cosmos DB.
 		/// </summary>
 		[JsonProperty(PropertyName = "_etag")]
+		[System.Text.Json.Serialization.JsonIgnore] // Prevent accidental exposure in API responses
 		public string? ETag { get; set; }
 
 		public required string Workplace

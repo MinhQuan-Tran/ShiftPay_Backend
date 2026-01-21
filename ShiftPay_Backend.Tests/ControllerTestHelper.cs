@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ShiftPay_Backend.Controllers;
 using ShiftPay_Backend.Data;
 using System.Security.Claims;
@@ -35,7 +36,7 @@ public static class ControllerTestHelper
 	/// </summary>
 	public static ShiftsController CreateShiftsController(ShiftPay_BackendContext context, string userId = TestUserId)
 	{
-		var logger = new LoggerFactory().CreateLogger<ShiftsController>();
+		var logger = NullLoggerFactory.Instance.CreateLogger<ShiftsController>();
 		var controller = new ShiftsController(logger, context);
 		SetupControllerContext(controller, userId);
 		return controller;
@@ -46,7 +47,7 @@ public static class ControllerTestHelper
 	/// </summary>
 	public static WorkInfosController CreateWorkInfosController(ShiftPay_BackendContext context, string userId = TestUserId)
 	{
-		var logger = new LoggerFactory().CreateLogger<WorkInfosController>();
+		var logger = NullLoggerFactory.Instance.CreateLogger<WorkInfosController>();
 		var controller = new WorkInfosController(logger, context);
 		SetupControllerContext(controller, userId);
 		return controller;
@@ -57,7 +58,7 @@ public static class ControllerTestHelper
 	/// </summary>
 	public static ShiftTemplatesController CreateShiftTemplatesController(ShiftPay_BackendContext context, string userId = TestUserId)
 	{
-		var logger = new LoggerFactory().CreateLogger<ShiftTemplatesController>();
+		var logger = NullLoggerFactory.Instance.CreateLogger<ShiftTemplatesController>();
 		var controller = new ShiftTemplatesController(logger, context);
 		SetupControllerContext(controller, userId);
 		return controller;
