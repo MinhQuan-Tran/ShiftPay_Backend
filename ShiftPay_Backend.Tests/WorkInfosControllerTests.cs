@@ -4,21 +4,17 @@ using ShiftPay_Backend.Models;
 namespace ShiftPay_Backend.Tests;
 
 [Collection("CosmosDb")]
-public class WorkInfosControllerTests : IAsyncLifetime
+public class WorkInfosControllerTests
 {
 	private readonly CosmosDbTestFixture _fixture;
+
+	// Each test class instance gets a unique user ID to ensure test isolation
+	// Database is cleaned at the start of each test run, not after each test
 	private readonly string _testUserId = $"workinfos-test-{Guid.NewGuid():N}";
 
 	public WorkInfosControllerTests(CosmosDbTestFixture fixture)
 	{
 		_fixture = fixture;
-	}
-
-	public Task InitializeAsync() => Task.CompletedTask;
-
-	public async Task DisposeAsync()
-	{
-		await _fixture.CleanupUserDataAsync(_testUserId);
 	}
 
 	[Fact]
@@ -384,4 +380,35 @@ public class WorkInfosControllerTests : IAsyncLifetime
 		Assert.Contains(20.00m, workInfo.PayRates);
 		Assert.Contains(25.00m, workInfo.PayRates);
 	}
+
+	#region Unique Key Constraint Tests
+
+	[Fact]
+	public async Task PostWorkInfo_SameWorkplaceDifferentUsers_BothSucceed()
+	{
+		// Arrange - Unique keys are scoped to partition (userId), so different users can have same workplace
+		var userId1 = $"unique-test-user1-{Guid.NewGuid():N}";
+		var userId2 = $"unique-test-user2-{Guid.NewGuid():N}";
+
+		await using var context1 = _fixture.CreateContext();
+		await using var context2 = _fixture.CreateContext();
+		var controller1 = ControllerTestHelper.CreateWorkInfosController(context1, userId1);
+		var controller2 = ControllerTestHelper.CreateWorkInfosController(context2, userId2);
+
+		var workInfoDto = new WorkInfoDTO
+		{
+			Workplace = "Shared Workplace Name",
+			PayRates = [15.00m]
+		};
+
+		// Act
+		var result1 = await controller1.PostWorkInfo(workInfoDto);
+		var result2 = await controller2.PostWorkInfo(workInfoDto);
+
+		// Assert - Both should succeed since they're in different partitions
+		Assert.IsType<CreatedAtActionResult>(result1.Result);
+		Assert.IsType<CreatedAtActionResult>(result2.Result);
+	}
+
+	#endregion
 }

@@ -4,21 +4,17 @@ using ShiftPay_Backend.Models;
 namespace ShiftPay_Backend.Tests;
 
 [Collection("CosmosDb")]
-public class ShiftTemplatesControllerTests : IAsyncLifetime
+public class ShiftTemplatesControllerTests
 {
 	private readonly CosmosDbTestFixture _fixture;
+
+	// Each test class instance gets a unique user ID to ensure test isolation
+	// Database is cleaned at the start of each test run, not after each test
 	private readonly string _testUserId = $"templates-test-{Guid.NewGuid():N}";
 
 	public ShiftTemplatesControllerTests(CosmosDbTestFixture fixture)
 	{
 		_fixture = fixture;
-	}
-
-	public Task InitializeAsync() => Task.CompletedTask;
-
-	public async Task DisposeAsync()
-	{
-		await _fixture.CleanupUserDataAsync(_testUserId);
 	}
 
 	[Fact]
@@ -494,4 +490,145 @@ public class ShiftTemplatesControllerTests : IAsyncLifetime
 		var createdTemplate = Assert.IsType<ShiftTemplateDTO>(createdResult.Value);
 		Assert.Equal(3, createdTemplate.UnpaidBreaks.Count);
 	}
+
+	#region Unique Key Constraint Tests
+
+	[Fact]
+	public async Task PostShiftTemplate_DuplicateTemplateName_UpdatesExisting()
+	{
+		// Arrange - TemplateName is unique per user, so posting same name should update
+		await using var context = _fixture.CreateContext();
+		var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
+
+		var originalTemplate = new ShiftTemplateDTO
+		{
+			TemplateName = "Unique Template Test",
+			Workplace = "Original Workplace",
+			PayRate = 15.00m,
+			StartTime = new DateTime(2024, 1, 1, 9, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 1, 17, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		};
+
+		var result1 = await controller.PostShiftTemplate(originalTemplate);
+		Assert.IsType<CreatedAtActionResult>(result1.Result);
+
+		// Act - Post same template name with different data
+		var updatedTemplate = new ShiftTemplateDTO
+		{
+			TemplateName = "Unique Template Test", // Same name
+			Workplace = "Updated Workplace",
+			PayRate = 25.00m,
+			StartTime = new DateTime(2024, 1, 1, 10, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 1, 18, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		};
+
+		var result2 = await controller.PostShiftTemplate(updatedTemplate);
+
+		// Assert - Should return OK (update) not Created
+		var okResult = Assert.IsType<OkObjectResult>(result2.Result);
+		var returnedTemplate = Assert.IsType<ShiftTemplateDTO>(okResult.Value);
+		Assert.Equal("Unique Template Test", returnedTemplate.TemplateName);
+		Assert.Equal("Updated Workplace", returnedTemplate.Workplace);
+		Assert.Equal(25.00m, returnedTemplate.PayRate);
+	}
+
+	[Fact]
+	public async Task PostShiftTemplate_SameTemplateNameDifferentUsers_BothSucceed()
+	{
+		// Arrange - Unique keys are scoped to partition (userId), so different users can have same template name
+		var userId1 = $"template-unique-user1-{Guid.NewGuid():N}";
+		var userId2 = $"template-unique-user2-{Guid.NewGuid():N}";
+
+		await using var context1 = _fixture.CreateContext();
+		await using var context2 = _fixture.CreateContext();
+		var controller1 = ControllerTestHelper.CreateShiftTemplatesController(context1, userId1);
+		var controller2 = ControllerTestHelper.CreateShiftTemplatesController(context2, userId2);
+
+		var templateDto = new ShiftTemplateDTO
+		{
+			TemplateName = "Shared Template Name",
+			Workplace = "Some Workplace",
+			PayRate = 20.00m,
+			StartTime = new DateTime(2024, 1, 1, 9, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 1, 17, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		};
+
+		// Act
+		var result1 = await controller1.PostShiftTemplate(templateDto);
+		var result2 = await controller2.PostShiftTemplate(templateDto);
+
+		// Assert - Both should succeed since they're in different partitions (users)
+		Assert.IsType<CreatedAtActionResult>(result1.Result);
+		Assert.IsType<CreatedAtActionResult>(result2.Result);
+
+		// Verify both templates exist separately
+		var getResult1 = await controller1.GetShiftTemplate("Shared Template Name");
+		var getResult2 = await controller2.GetShiftTemplate("Shared Template Name");
+
+		Assert.IsType<OkObjectResult>(getResult1.Result);
+		Assert.IsType<OkObjectResult>(getResult2.Result);
+	}
+
+	[Fact]
+	public async Task GetShiftTemplates_WithUniqueConstraint_ReturnsOnlyUserTemplates()
+	{
+		// Arrange - Create templates for two users with same names
+		var userId1 = $"isolation-user1-{Guid.NewGuid():N}";
+		var userId2 = $"isolation-user2-{Guid.NewGuid():N}";
+
+		await using var context1 = _fixture.CreateContext();
+		await using var context2 = _fixture.CreateContext();
+		var controller1 = ControllerTestHelper.CreateShiftTemplatesController(context1, userId1);
+		var controller2 = ControllerTestHelper.CreateShiftTemplatesController(context2, userId2);
+
+		// Create 2 templates for user1
+		await controller1.PostShiftTemplate(new ShiftTemplateDTO
+		{
+			TemplateName = "Template A",
+			Workplace = "Workplace",
+			PayRate = 15.00m,
+			StartTime = new DateTime(2024, 1, 1, 9, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 1, 17, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		});
+		await controller1.PostShiftTemplate(new ShiftTemplateDTO
+		{
+			TemplateName = "Template B",
+			Workplace = "Workplace",
+			PayRate = 18.00m,
+			StartTime = new DateTime(2024, 1, 1, 10, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 1, 18, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		});
+
+		// Create 1 template for user2 with same name as user1's template
+		await controller2.PostShiftTemplate(new ShiftTemplateDTO
+		{
+			TemplateName = "Template A",
+			Workplace = "Different Workplace",
+			PayRate = 20.00m,
+			StartTime = new DateTime(2024, 1, 1, 8, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 1, 16, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		});
+
+		// Act
+		var result1 = await controller1.GetShiftTemplates();
+		var result2 = await controller2.GetShiftTemplates();
+
+		// Assert - Each user should only see their own templates
+		var okResult1 = Assert.IsType<OkObjectResult>(result1.Result);
+		var templates1 = Assert.IsAssignableFrom<IEnumerable<ShiftTemplateDTO>>(okResult1.Value).ToList();
+		Assert.Equal(2, templates1.Count);
+
+		var okResult2 = Assert.IsType<OkObjectResult>(result2.Result);
+		var templates2 = Assert.IsAssignableFrom<IEnumerable<ShiftTemplateDTO>>(okResult2.Value).ToList();
+		Assert.Single(templates2);
+		Assert.Equal("Different Workplace", templates2[0].Workplace);
+	}
+
+	#endregion
 }
