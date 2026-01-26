@@ -98,8 +98,8 @@ public class DatabaseInfrastructureTests
         var exception = await Assert.ThrowsAsync<DbUpdateException>(
             () => context.SaveChangesAsync());
 
-        // Verify it's a Cosmos conflict (409) error
-        Assert.Contains("Conflict", exception.InnerException?.Message ?? exception.Message, StringComparison.OrdinalIgnoreCase);
+        // Verify it's a Cosmos conflict (409) error - check StatusCode, not message string
+        AssertCosmosConflict(exception);
     }
 
     [Fact]
@@ -185,8 +185,8 @@ public class DatabaseInfrastructureTests
         var exception = await Assert.ThrowsAsync<DbUpdateException>(
             () => context.SaveChangesAsync());
 
-        // Verify it's a Cosmos conflict (409) error
-        Assert.Contains("Conflict", exception.InnerException?.Message ?? exception.Message, StringComparison.OrdinalIgnoreCase);
+        // Verify it's a Cosmos conflict (409) error - check StatusCode, not message string
+        AssertCosmosConflict(exception);
     }
 
     [Fact]
@@ -331,6 +331,32 @@ public class DatabaseInfrastructureTests
         // This proves that UseETagConcurrency() is working
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
             () => context1.SaveChangesAsync());
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    /// <summary>
+    /// Asserts that the exception is caused by a Cosmos DB conflict (HTTP 409).
+    /// Checks the actual StatusCode rather than relying on brittle string matching.
+    /// </summary>
+    private static void AssertCosmosConflict(DbUpdateException exception)
+    {
+        // Walk the exception chain to find CosmosException
+        var innerException = exception.InnerException;
+        while (innerException != null)
+        {
+            if (innerException is CosmosException cosmosException)
+            {
+                Assert.Equal(System.Net.HttpStatusCode.Conflict, cosmosException.StatusCode);
+                return;
+            }
+            innerException = innerException.InnerException;
+        }
+
+        // If no CosmosException found, fail with helpful message
+        Assert.Fail($"Expected CosmosException with Conflict status, but inner exception was: {exception.InnerException?.GetType().Name ?? "null"}");
     }
 
     #endregion
