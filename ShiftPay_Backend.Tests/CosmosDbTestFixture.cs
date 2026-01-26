@@ -7,13 +7,14 @@ namespace ShiftPay_Backend.Tests;
 
 /// <summary>
 /// Shared test fixture that initializes a single Cosmos DB connection for all tests.
-/// Uses the Azure Cosmos DB Emulator with the "ShiftPay" database.
+/// Uses the Azure Cosmos DB Emulator with the "ShiftPay_Test" database.
+/// The database is deleted and recreated at the start of each test run.
 /// </summary>
 public class CosmosDbTestFixture : IAsyncLifetime
 {
 	private const string EmulatorEndpoint = "https://localhost:8081/";
 	private const string EmulatorKey = "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
-	private const string DatabaseName = "ShiftPay";
+	private const string DatabaseName = "ShiftPay_Test"; // Use separate database for tests
 
 	private CosmosClient? _cosmosClient;
 
@@ -47,7 +48,7 @@ public class CosmosDbTestFixture : IAsyncLifetime
 		return new ShiftPay_BackendContext(options, configuration);
 	}
 
-	public async Task InitializeAsync()
+	public async ValueTask InitializeAsync()
 	{
 		// Create the Cosmos client with emulator settings
 		var cosmosClientOptions = new CosmosClientOptions
@@ -65,55 +66,72 @@ public class CosmosDbTestFixture : IAsyncLifetime
 
 		_cosmosClient = new CosmosClient(EmulatorEndpoint, EmulatorKey, cosmosClientOptions);
 
-		// Create database if it doesn't exist
-		var databaseResponse = await _cosmosClient.CreateDatabaseIfNotExistsAsync(DatabaseName);
+		// Delete the database if it exists to ensure clean state
+		// This also ensures unique key policies are properly applied (they can only be set at creation)
+		try
+		{
+			var existingDatabase = _cosmosClient.GetDatabase(DatabaseName);
+			await existingDatabase.DeleteAsync();
+		}
+		catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+		{
+			// Database doesn't exist, that's fine
+		}
+
+		// Create fresh database
+		var databaseResponse = await _cosmosClient.CreateDatabaseAsync(DatabaseName);
 		var database = databaseResponse.Database;
 
-		// Create containers if they don't exist
-		await database.CreateContainerIfNotExistsAsync(new ContainerProperties("Shifts", new[] { "/UserId", "/YearMonth", "/Day" }));
-		await database.CreateContainerIfNotExistsAsync(new ContainerProperties("WorkInfos", new[] { "/UserId" }));
-		await database.CreateContainerIfNotExistsAsync(new ContainerProperties("ShiftTemplates", new[] { "/UserId" }));
+		// Create containers with partition keys and unique key policies
+		// Note: Unique keys are scoped within a partition
+
+		// Shifts container - no unique key needed (Id is unique)
+		await database.CreateContainerAsync(
+			new ContainerProperties("Shifts", ["/UserId", "/YearMonth", "/Day"]));
+
+		// WorkInfos container - Workplace should be unique per user (partition)
+		var workInfosProperties = new ContainerProperties("WorkInfos", ["/UserId"])
+		{
+			UniqueKeyPolicy = new UniqueKeyPolicy
+			{
+				UniqueKeys =
+				{
+					new UniqueKey { Paths = { "/Workplace" } }
+				}
+			}
+		};
+		await database.CreateContainerAsync(workInfosProperties);
+
+		// ShiftTemplates container - TemplateName should be unique per user (partition)
+		var shiftTemplatesProperties = new ContainerProperties("ShiftTemplates", ["/UserId"])
+		{
+			UniqueKeyPolicy = new UniqueKeyPolicy
+			{
+				UniqueKeys =
+				{
+					new UniqueKey { Paths = { "/TemplateName" } }
+				}
+			}
+		};
+		await database.CreateContainerAsync(shiftTemplatesProperties);
 
 		// Ensure EF Core schema is created
 		await using var context = CreateContext();
 		await context.Database.EnsureCreatedAsync();
 	}
 
-	public async Task DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
 		_cosmosClient?.Dispose();
-		await Task.CompletedTask;
-	}
-
-	/// <summary>
-	/// Cleans up test data for a specific user ID.
-	/// Call this in test cleanup to isolate test data.
-	/// </summary>
-	public async Task CleanupUserDataAsync(string userId)
-	{
-		await using var context = CreateContext();
-
-		var shifts = await context.Shifts
-			.Where(s => s.UserId == userId)
-			.ToListAsync();
-		context.Shifts.RemoveRange(shifts);
-
-		var workInfos = await context.WorkInfos
-			.Where(w => w.UserId == userId)
-			.ToListAsync();
-		context.WorkInfos.RemoveRange(workInfos);
-
-		var shiftTemplates = await context.ShiftTemplates
-			.Where(st => st.UserId == userId)
-			.ToListAsync();
-		context.ShiftTemplates.RemoveRange(shiftTemplates);
-
-		await context.SaveChangesAsync();
+		return ValueTask.CompletedTask;
 	}
 }
 
 /// <summary>
 /// Collection definition for sharing the CosmosDbTestFixture across all test classes.
+/// The fixture is initialized once per test run, which deletes and recreates the database.
+/// Each test class instance gets a unique user ID (via Guid) to ensure test isolation
+/// without needing per-test cleanup.
 /// </summary>
 [CollectionDefinition("CosmosDb")]
 public class CosmosDbCollection : ICollectionFixture<CosmosDbTestFixture>

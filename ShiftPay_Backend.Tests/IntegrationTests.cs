@@ -24,7 +24,7 @@ public class IntegrationTests : IAsyncLifetime
 	private HttpClient? _httpClient;
 	private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
 
-	public async Task InitializeAsync()
+	public async ValueTask InitializeAsync()
 	{
 		var appHost = await DistributedApplicationTestingBuilder
 			.CreateAsync<Projects.ShiftPay_Backend_AppHost>();
@@ -52,7 +52,7 @@ public class IntegrationTests : IAsyncLifetime
 			.WaitForResourceAsync("shiftpay-backend", KnownResourceStates.Running, cts.Token);
 	}
 
-	public async Task DisposeAsync()
+	public async ValueTask DisposeAsync()
 	{
 		_httpClient?.Dispose();
 		if (_app is not null)

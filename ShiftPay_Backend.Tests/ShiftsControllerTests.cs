@@ -4,21 +4,17 @@ using ShiftPay_Backend.Models;
 namespace ShiftPay_Backend.Tests;
 
 [Collection("CosmosDb")]
-public class ShiftsControllerTests : IAsyncLifetime
+public class ShiftsControllerTests
 {
 	private readonly CosmosDbTestFixture _fixture;
+
+	// Each test class instance gets a unique user ID to ensure test isolation
+	// Database is cleaned at the start of each test run, not after each test
 	private readonly string _testUserId = $"shifts-test-{Guid.NewGuid():N}";
 
 	public ShiftsControllerTests(CosmosDbTestFixture fixture)
 	{
 		_fixture = fixture;
-	}
-
-	public Task InitializeAsync() => Task.CompletedTask;
-
-	public async Task DisposeAsync()
-	{
-		await _fixture.CleanupUserDataAsync(_testUserId);
 	}
 
 	[Fact]
