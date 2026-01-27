@@ -86,13 +86,6 @@ namespace ShiftPay_Backend.Controllers
 
 			if (workInfo == null)
 			{
-				workInfo = await _context.WorkInfos
-					.WithPartitionKey(userId)
-					.FirstOrDefaultAsync(info => info.Workplace == workInfoDto.Workplace);
-			}
-
-			if (workInfo == null)
-			{
 				try
 				{
 					workInfo = WorkInfo.FromDTO(workInfoDto, userId);
@@ -103,10 +96,19 @@ namespace ShiftPay_Backend.Controllers
 				}
 
 				_context.WorkInfos.Add(workInfo);
-				await _context.SaveChangesAsync();
+				try
+				{
+					await _context.SaveChangesAsync();
+				}
+				catch (DbUpdateException ex)
+				{
+					_logger.LogWarning(ex, "Failed to create work info for user {UserId}", userId);
+					return Conflict("Failed to create work info.");
+				}
 				return CreatedAtAction(nameof(GetWorkInfo), new { id = workInfo.Id }, workInfo.ToDTO());
 			}
 
+			workInfo.Workplace = workInfoDto.Workplace;
 			workInfo.PayRates = (workInfo.PayRates ?? [])
 				.Union(workInfoDto.PayRates ?? [])
 				.ToHashSet()
@@ -121,7 +123,15 @@ namespace ShiftPay_Backend.Controllers
 				return BadRequest(ex.Message);
 			}
 
-			await _context.SaveChangesAsync();
+			try
+			{
+				await _context.SaveChangesAsync();
+			}
+			catch (DbUpdateException ex)
+			{
+				_logger.LogWarning(ex, "Failed to update work info {WorkInfoId} for user {UserId}", workInfo.Id, userId);
+				return Conflict("Failed to update work info.");
+			}
 
 			return Ok(workInfo.ToDTO());
 		}

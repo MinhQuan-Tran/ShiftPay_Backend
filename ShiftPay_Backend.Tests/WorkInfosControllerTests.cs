@@ -69,10 +69,14 @@ public class WorkInfosControllerTests
 			Workplace = "Test Restaurant",
 			PayRates = [15.00m, 18.00m]
 		};
-		await controller.PostWorkInfo(initialWorkInfo);
+		var initialResult = await controller.PostWorkInfo(initialWorkInfo);
+		var initialCreated = Assert.IsType<CreatedAtActionResult>(initialResult.Result);
+		var initialWorkInfoResult = Assert.IsType<WorkInfoDTO>(initialCreated.Value);
+		Assert.True(initialWorkInfoResult.Id.HasValue);
 
 		var additionalWorkInfo = new WorkInfoDTO
 		{
+			Id = initialWorkInfoResult.Id,
 			Workplace = "Test Restaurant",
 			PayRates = [18.00m, 20.00m, 22.00m] // 18.00m is duplicate
 		};
@@ -380,15 +384,19 @@ public class WorkInfosControllerTests
 		var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
 
 		// Create initial work info
-		await controller.PostWorkInfo(new WorkInfoDTO
+		var initialResult = await controller.PostWorkInfo(new WorkInfoDTO
 		{
 			Workplace = "Merge Test",
 			PayRates = [15.00m]
 		});
+		var initialCreated = Assert.IsType<CreatedAtActionResult>(initialResult.Result);
+		var initialWorkInfoResult = Assert.IsType<WorkInfoDTO>(initialCreated.Value);
+		Assert.True(initialWorkInfoResult.Id.HasValue);
 
 		// Add more pay rates
 		var result = await controller.PostWorkInfo(new WorkInfoDTO
 		{
+			Id = initialWorkInfoResult.Id,
 			Workplace = "Merge Test",
 			PayRates = [20.00m, 25.00m]
 		});
