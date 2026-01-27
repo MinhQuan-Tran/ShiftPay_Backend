@@ -39,10 +39,10 @@ namespace ShiftPay_Backend.Controllers
 		}
 
 		// GET: api/WorkInfos/{id}
-		[HttpGet("{id}")]
-		public async Task<ActionResult<WorkInfoDTO>> GetWorkInfo(string id)
+		[HttpGet("{id:guid}")]
+		public async Task<ActionResult<WorkInfoDTO>> GetWorkInfo(Guid id)
 		{
-			if (string.IsNullOrWhiteSpace(id))
+			if (id == Guid.Empty)
 			{
 				return BadRequest("Id cannot be empty.");
 			}
@@ -78,19 +78,18 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			string id;
-			try
+			WorkInfo? workInfo = null;
+			if (workInfoDto.Id.HasValue && workInfoDto.Id.Value != Guid.Empty)
 			{
-				id = WorkInfo.CreateId(workInfoDto.Workplace);
-			}
-			catch (ArgumentException ex)
-			{
-				return BadRequest(ex.Message);
+				workInfo = await _context.WorkInfos.FindAsync(workInfoDto.Id.Value, userId);
 			}
 
-
-			// Cosmos point-read: (partitionKey, id)
-			var workInfo = await _context.WorkInfos.FindAsync(id, userId);
+			if (workInfo == null)
+			{
+				workInfo = await _context.WorkInfos
+					.WithPartitionKey(userId)
+					.FirstOrDefaultAsync(info => info.Workplace == workInfoDto.Workplace);
+			}
 
 			if (workInfo == null)
 			{
@@ -108,7 +107,10 @@ namespace ShiftPay_Backend.Controllers
 				return CreatedAtAction(nameof(GetWorkInfo), new { id = workInfo.Id }, workInfo.ToDTO());
 			}
 
-			workInfo.PayRates = workInfo.PayRates.Union(workInfoDto.PayRates).ToHashSet().ToList();
+			workInfo.PayRates = (workInfo.PayRates ?? [])
+				.Union(workInfoDto.PayRates ?? [])
+				.ToHashSet()
+				.ToList();
 
 			try
 			{
@@ -125,10 +127,10 @@ namespace ShiftPay_Backend.Controllers
 		}
 
 		// DELETE: api/WorkInfos/{id}
-		[HttpDelete("{id}")]
-		public async Task<IActionResult> DeleteWorkInfo(string id, decimal? payRate)
+		[HttpDelete("{id:guid}")]
+		public async Task<IActionResult> DeleteWorkInfo(Guid id, decimal? payRate)
 		{
-			if (string.IsNullOrWhiteSpace(id))
+			if (id == Guid.Empty)
 			{
 				return BadRequest("Id cannot be empty.");
 			}
