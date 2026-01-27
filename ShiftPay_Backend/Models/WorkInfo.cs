@@ -5,7 +5,7 @@ namespace ShiftPay_Backend.Models
 	public class WorkInfo
 	{
 		[JsonProperty(PropertyName = "id")]
-		public required string Id { get; set; } // From Workplace, will be created via CreateId() in FromDTO() only
+		public required Guid Id { get; set; } = Guid.NewGuid();
 
 		public required string UserId { get; set; } // Partition Key
 
@@ -43,8 +43,9 @@ namespace ShiftPay_Backend.Models
 		{
 			return new WorkInfoDTO
 			{
+				Id = Id,
 				Workplace = this.Workplace,
-				PayRates = new List<decimal>(this.PayRates)
+				PayRates = new List<decimal>(this.PayRates ?? [])
 			};
 		}
 
@@ -52,25 +53,22 @@ namespace ShiftPay_Backend.Models
 		{
 			var workInfo = new WorkInfo
 			{
-				Id = CreateId(dto.Workplace),
+				Id = dto.Id ?? Guid.NewGuid(),
 				UserId = userId,
 				Workplace = dto.Workplace,
-				PayRates = new List<decimal>(dto.PayRates)
+				PayRates = new List<decimal>(dto.PayRates ?? [])
 			};
 
 			workInfo.Validate();
 			return workInfo;
 		}
 
-		public static string CreateId(string workplace)
-		{
-			ArgumentException.ThrowIfNullOrWhiteSpace(workplace);
-			return workplace.Trim();
-		}
 	}
 
 	public class WorkInfoDTO
 	{
+		public Guid? Id { get; set; }
+
 		public required string Workplace { get; set => field = value.Trim(); }
 
 		public List<decimal> PayRates { get; set; } = new List<decimal>();

@@ -38,30 +38,19 @@ namespace ShiftPay_Backend.Controllers
 			return Ok(workInfos.Select(workInfo => workInfo.ToDTO()));
 		}
 
-		// GET: api/WorkInfos/KFC
-		[HttpGet("{workplace}")]
-		public async Task<ActionResult<WorkInfoDTO>> GetWorkInfo(string workplace)
+		// GET: api/WorkInfos/{id}
+		[HttpGet("{id:guid}")]
+		public async Task<ActionResult<WorkInfoDTO>> GetWorkInfo(Guid id)
 		{
-			workplace = Uri.UnescapeDataString(workplace.Trim());
-			if (string.IsNullOrEmpty(workplace))
+			if (id == Guid.Empty)
 			{
-				return BadRequest("Workplace cannot be empty.");
+				return BadRequest("Id cannot be empty.");
 			}
 
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			if (string.IsNullOrEmpty(userId))
 			{
 				return Unauthorized("User ID is missing.");
-			}
-
-			string id;
-			try
-			{
-				id = WorkInfo.CreateId(workplace);
-			}
-			catch (ArgumentException ex)
-			{
-				return BadRequest(ex.Message);
 			}
 
 			// https://learn.microsoft.com/en-us/azure/cosmos-db/optimize-cost-reads-writes
@@ -89,19 +78,11 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			string id;
-			try
+			WorkInfo? workInfo = null;
+			if (workInfoDto.Id.HasValue && workInfoDto.Id.Value != Guid.Empty)
 			{
-				id = WorkInfo.CreateId(workInfoDto.Workplace);
+				workInfo = await _context.WorkInfos.FindAsync(workInfoDto.Id.Value, userId);
 			}
-			catch (ArgumentException ex)
-			{
-				return BadRequest(ex.Message);
-			}
-
-
-			// Cosmos point-read: (partitionKey, id)
-			var workInfo = await _context.WorkInfos.FindAsync(id, userId);
 
 			if (workInfo == null)
 			{
@@ -115,11 +96,23 @@ namespace ShiftPay_Backend.Controllers
 				}
 
 				_context.WorkInfos.Add(workInfo);
-				await _context.SaveChangesAsync();
-				return CreatedAtAction(nameof(GetWorkInfo), new { workplace = workInfo.Workplace }, workInfo.ToDTO());
+				try
+				{
+					await _context.SaveChangesAsync();
+				}
+				catch (DbUpdateException ex)
+				{
+					_logger.LogWarning(ex, "Failed to create work info for user {UserId}", userId);
+					return Conflict("Failed to create work info.");
+				}
+				return CreatedAtAction(nameof(GetWorkInfo), new { id = workInfo.Id }, workInfo.ToDTO());
 			}
 
-			workInfo.PayRates = workInfo.PayRates.Union(workInfoDto.PayRates).ToHashSet().ToList();
+			workInfo.Workplace = workInfoDto.Workplace;
+			workInfo.PayRates = (workInfo.PayRates ?? [])
+				.Union(workInfoDto.PayRates ?? [])
+				.ToHashSet()
+				.ToList();
 
 			try
 			{
@@ -130,35 +123,32 @@ namespace ShiftPay_Backend.Controllers
 				return BadRequest(ex.Message);
 			}
 
-			await _context.SaveChangesAsync();
+			try
+			{
+				await _context.SaveChangesAsync();
+			}
+			catch (DbUpdateException ex)
+			{
+				_logger.LogWarning(ex, "Failed to update work info {WorkInfoId} for user {UserId}", workInfo.Id, userId);
+				return Conflict("Failed to update work info.");
+			}
 
 			return Ok(workInfo.ToDTO());
 		}
 
-		// DELETE: api/WorkInfos/KFC
-		[HttpDelete("{workplace}")]
-		public async Task<IActionResult> DeleteWorkInfo(string workplace, decimal? payRate)
+		// DELETE: api/WorkInfos/{id}
+		[HttpDelete("{id:guid}")]
+		public async Task<IActionResult> DeleteWorkInfo(Guid id, decimal? payRate)
 		{
-			workplace = Uri.UnescapeDataString(workplace.Trim());
-			if (string.IsNullOrEmpty(workplace))
+			if (id == Guid.Empty)
 			{
-				return BadRequest("Workplace cannot be empty.");
+				return BadRequest("Id cannot be empty.");
 			}
 
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			if (string.IsNullOrEmpty(userId))
 			{
 				return Unauthorized("User ID is missing.");
-			}
-
-			string id;
-			try
-			{
-				id = WorkInfo.CreateId(workplace);
-			}
-			catch (ArgumentException ex)
-			{
-				return BadRequest(ex.Message);
 			}
 
 			// Cosmos point-read: (id, partitionKey)
