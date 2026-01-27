@@ -103,7 +103,7 @@ namespace ShiftPay_Backend.Controllers
 					return BadRequest(ex.Message);
 				}
 
-			_context.WorkInfos.Add(workInfo);
+				_context.WorkInfos.Add(workInfo);
 				await _context.SaveChangesAsync();
 				return CreatedAtAction(nameof(GetWorkInfo), new { id = workInfo.Id }, workInfo.ToDTO());
 			}

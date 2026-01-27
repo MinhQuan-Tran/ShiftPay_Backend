@@ -53,9 +53,7 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			var shiftTemplate = await _context.ShiftTemplates
-				.WithPartitionKey(userId)
-				.FirstOrDefaultAsync(st => st.Id == id);
+			var shiftTemplate = await _context.ShiftTemplates.FindAsync(id, userId);
 
 			return shiftTemplate != default ? Ok(shiftTemplate.ToDTO()) : NotFound("No matching shift template found.");
 		}
@@ -135,9 +133,7 @@ namespace ShiftPay_Backend.Controllers
 				return Unauthorized("User ID is missing.");
 			}
 
-			var shiftTemplate = await _context.ShiftTemplates
-				.WithPartitionKey(userId)
-				.FirstOrDefaultAsync(st => st.Id == id);
+			var shiftTemplate = await _context.ShiftTemplates.FindAsync(id, userId);
 
 			if (shiftTemplate == default)
 			{
