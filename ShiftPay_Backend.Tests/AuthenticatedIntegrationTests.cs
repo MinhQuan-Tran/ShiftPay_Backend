@@ -318,4 +318,75 @@ public class AuthenticatedIntegrationTests : IAsyncLifetime
 		Assert.NotNull(createdShifts);
 		Assert.Equal(2, createdShifts.Count);
 	}
+
+	[Fact]
+	public async Task GetShiftTemplate_WithUrlEncodedSpecialCharacters_ReturnsTemplate()
+	{
+		// Arrange - Create template with special characters: | (pipe) and / (forward slash)
+		// Real example: "McDonald | O/N" needs to be URL encoded as "McDonald%20%7C%20O%2FN"
+		var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+		var templateName = $"Test | O/N {uniqueSuffix}"; // Unique name to avoid conflicts
+		var templateDto = new ShiftTemplateDTO
+		{
+			TemplateName = templateName,
+			Workplace = "Fast Food",
+			PayRate = 22.00m,
+			StartTime = new DateTime(2024, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = [TimeSpan.FromMinutes(30)]
+		};
+
+		var createResponse = await _httpClient!.PostAsJsonAsync("/api/shifttemplates", templateDto);
+		Assert.True(
+			createResponse.StatusCode == HttpStatusCode.Created ||
+			createResponse.StatusCode == HttpStatusCode.OK,
+			$"Expected Created or OK, got {createResponse.StatusCode}");
+
+		// Act - Get using URL-encoded template name
+		// Uri.EscapeDataString properly encodes: space=%20, |=%7C, /=%2F
+		var encodedName = Uri.EscapeDataString(templateName);
+		var getResponse = await _httpClient!.GetAsync($"/api/shifttemplates/{encodedName}");
+
+		// Assert
+		Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+		var retrievedTemplate = await getResponse.Content.ReadFromJsonAsync<ShiftTemplateDTO>();
+		Assert.NotNull(retrievedTemplate);
+		Assert.Equal(templateName, retrievedTemplate.TemplateName);
+		Assert.Equal("Fast Food", retrievedTemplate.Workplace);
+	}
+
+	[Fact]
+	public async Task DeleteShiftTemplate_WithUrlEncodedSpecialCharacters_ReturnsNoContent()
+	{
+		// Arrange - Create and then delete template with special characters
+		var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+		var templateName = $"Delete | Test/Name {uniqueSuffix}";
+		var templateDto = new ShiftTemplateDTO
+		{
+			TemplateName = templateName,
+			Workplace = "Test Workplace",
+			PayRate = 20.00m,
+			StartTime = new DateTime(2024, 1, 1, 9, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 1, 17, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = []
+		};
+
+		var createResponse = await _httpClient!.PostAsJsonAsync("/api/shifttemplates", templateDto);
+		Assert.True(
+			createResponse.StatusCode == HttpStatusCode.Created ||
+			createResponse.StatusCode == HttpStatusCode.OK,
+			$"Expected Created or OK, got {createResponse.StatusCode}");
+
+		// Act - Delete using URL-encoded template name
+		var encodedName = Uri.EscapeDataString(templateName);
+		var deleteResponse = await _httpClient!.DeleteAsync($"/api/shifttemplates/{encodedName}");
+
+		// Assert
+		Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+		// Verify deleted
+		var getResponse = await _httpClient!.GetAsync($"/api/shifttemplates/{encodedName}");
+		Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+	}
 }
