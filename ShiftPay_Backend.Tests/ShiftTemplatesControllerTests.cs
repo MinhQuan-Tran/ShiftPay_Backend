@@ -161,13 +161,43 @@ public class ShiftTemplatesControllerTests
 		};
 		await controller.PostShiftTemplate(templateDto);
 
-		// Act - URL encoded template name
+		// Act - URL encoded template name (& encoded as %26)
 		var result = await controller.GetShiftTemplate("Weekend%20Special%20%26%20Holiday");
 
 		// Assert
 		var okResult = Assert.IsType<OkObjectResult>(result.Result);
 		var retrievedTemplate = Assert.IsType<ShiftTemplateDTO>(okResult.Value);
 		Assert.Equal("Weekend Special & Holiday", retrievedTemplate.TemplateName);
+	}
+
+	[Fact]
+	public async Task GetShiftTemplate_WithPipeAndSlashCharacters_ReturnsTemplate()
+	{
+		// Arrange - Test special characters: | (pipe) and / (forward slash)
+		// These are particularly tricky since / is normally a URL path separator
+		// Real example: "McDonald | O/N" encoded as "McDonald%20%7C%20O%2FN"
+		await using var context = _fixture.CreateContext();
+		var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
+
+		var templateDto = new ShiftTemplateDTO
+		{
+			TemplateName = "McDonald | O/N",
+			Workplace = "Fast Food",
+			PayRate = 22.00m,
+			StartTime = new DateTime(2024, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+			EndTime = new DateTime(2024, 1, 2, 6, 0, 0, DateTimeKind.Utc),
+			UnpaidBreaks = [TimeSpan.FromMinutes(30)]
+		};
+		await controller.PostShiftTemplate(templateDto);
+
+		// Act - URL encoded: space=%20, |=%7C, /=%2F
+		var result = await controller.GetShiftTemplate("McDonald%20%7C%20O%2FN");
+
+		// Assert
+		var okResult = Assert.IsType<OkObjectResult>(result.Result);
+		var retrievedTemplate = Assert.IsType<ShiftTemplateDTO>(okResult.Value);
+		Assert.Equal("McDonald | O/N", retrievedTemplate.TemplateName);
+		Assert.Equal("Fast Food", retrievedTemplate.Workplace);
 	}
 
 	[Fact]
