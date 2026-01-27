@@ -104,9 +104,10 @@ public class WorkInfosControllerTests
 			PayRates = [16.50m]
 		};
 		await controller.PostWorkInfo(workInfoDto);
+		var workInfoId = WorkInfo.CreateId(workInfoDto.Workplace);
 
 		// Act
-		var result = await controller.GetWorkInfo("Test Store");
+		var result = await controller.GetWorkInfo(workInfoId);
 
 		// Assert
 		var okResult = Assert.IsType<OkObjectResult>(result.Result);
@@ -124,14 +125,14 @@ public class WorkInfosControllerTests
 		var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
 
 		// Act
-		var result = await controller.GetWorkInfo("NonExistent Workplace");
+		var result = await controller.GetWorkInfo(WorkInfo.CreateId("NonExistent Workplace"));
 
 		// Assert
 		Assert.IsType<NotFoundResult>(result.Result);
 	}
 
 	[Fact]
-	public async Task GetWorkInfo_WithEncodedWorkplaceName_ReturnsWorkInfo()
+	public async Task GetWorkInfo_WithSpecialCharactersInId_ReturnsWorkInfo()
 	{
 		// Arrange
 		await using var context = _fixture.CreateContext();
@@ -143,9 +144,10 @@ public class WorkInfosControllerTests
 			PayRates = [17.00m]
 		};
 		await controller.PostWorkInfo(workInfoDto);
+		var workInfoId = WorkInfo.CreateId(workInfoDto.Workplace);
 
-		// Act - URL encoded workplace name
-		var result = await controller.GetWorkInfo("Joe's%20Coffee%20%26%20Tea");
+		// Act
+		var result = await controller.GetWorkInfo(workInfoId);
 
 		// Assert
 		var okResult = Assert.IsType<OkObjectResult>(result.Result);
@@ -166,15 +168,16 @@ public class WorkInfosControllerTests
 			PayRates = [15.00m]
 		};
 		await controller.PostWorkInfo(workInfoDto);
+		var workInfoId = WorkInfo.CreateId(workInfoDto.Workplace);
 
 		// Act
-		var result = await controller.DeleteWorkInfo("Workplace To Delete", null);
+		var result = await controller.DeleteWorkInfo(workInfoId, null);
 
 		// Assert
 		Assert.IsType<NoContentResult>(result);
 
 		// Verify deleted
-		var getResult = await controller.GetWorkInfo("Workplace To Delete");
+		var getResult = await controller.GetWorkInfo(workInfoId);
 		Assert.IsType<NotFoundResult>(getResult.Result);
 	}
 
@@ -191,15 +194,16 @@ public class WorkInfosControllerTests
 			PayRates = [15.00m, 18.00m, 20.00m]
 		};
 		await controller.PostWorkInfo(workInfoDto);
+		var workInfoId = WorkInfo.CreateId(workInfoDto.Workplace);
 
 		// Act - delete only the 18.00m pay rate
-		var result = await controller.DeleteWorkInfo("Multi Rate Workplace", 18.00m);
+		var result = await controller.DeleteWorkInfo(workInfoId, 18.00m);
 
 		// Assert
 		Assert.IsType<NoContentResult>(result);
 
 		// Verify pay rate removed
-		var getResult = await controller.GetWorkInfo("Multi Rate Workplace");
+		var getResult = await controller.GetWorkInfo(workInfoId);
 		var okResult = Assert.IsType<OkObjectResult>(getResult.Result);
 		var updatedWorkInfo = Assert.IsType<WorkInfoDTO>(okResult.Value);
 		Assert.Equal(2, updatedWorkInfo.PayRates.Count);
@@ -209,28 +213,28 @@ public class WorkInfosControllerTests
 	}
 
 	[Fact]
-	public async Task DeleteWorkInfo_WhenWorkplaceDoesNotExist_ReturnsNoContent()
+	public async Task DeleteWorkInfo_WhenIdDoesNotExist_ReturnsNoContent()
 	{
 		// Arrange
 		await using var context = _fixture.CreateContext();
 		var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
 
-		// Act - deleting non-existent workplace without payRate parameter
-		var result = await controller.DeleteWorkInfo("NonExistent", null);
+		// Act - deleting non-existent id without payRate parameter
+		var result = await controller.DeleteWorkInfo(WorkInfo.CreateId("NonExistent"), null);
 
 		// Assert - returns NoContent even if not found (idempotent delete)
 		Assert.IsType<NoContentResult>(result);
 	}
 
 	[Fact]
-	public async Task DeleteWorkInfo_WithPayRateWhenWorkplaceDoesNotExist_ReturnsNotFound()
+	public async Task DeleteWorkInfo_WithPayRateWhenIdDoesNotExist_ReturnsNotFound()
 	{
 		// Arrange
 		await using var context = _fixture.CreateContext();
 		var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
 
-		// Act - trying to delete pay rate from non-existent workplace
-		var result = await controller.DeleteWorkInfo("NonExistent", 15.00m);
+		// Act - trying to delete pay rate from non-existent id
+		var result = await controller.DeleteWorkInfo(WorkInfo.CreateId("NonExistent"), 15.00m);
 
 		// Assert
 		Assert.IsType<NotFoundResult>(result);
@@ -323,15 +327,16 @@ public class WorkInfosControllerTests
 			PayRates = [15.00m, 20.00m]
 		};
 		await controller.PostWorkInfo(workInfoDto);
+		var workInfoId = WorkInfo.CreateId(workInfoDto.Workplace);
 
 		// Act - try to delete a pay rate that doesn't exist
-		var result = await controller.DeleteWorkInfo("Test Workplace", 999.00m);
+		var result = await controller.DeleteWorkInfo(workInfoId, 999.00m);
 
 		// Assert
 		Assert.IsType<NoContentResult>(result);
 
 		// Verify pay rates unchanged
-		var getResult = await controller.GetWorkInfo("Test Workplace");
+		var getResult = await controller.GetWorkInfo(workInfoId);
 		var okResult = Assert.IsType<OkObjectResult>(getResult.Result);
 		var workInfo = Assert.IsType<WorkInfoDTO>(okResult.Value);
 		Assert.Equal(2, workInfo.PayRates.Count);

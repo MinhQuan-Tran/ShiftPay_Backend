@@ -38,30 +38,19 @@ namespace ShiftPay_Backend.Controllers
 			return Ok(workInfos.Select(workInfo => workInfo.ToDTO()));
 		}
 
-		// GET: api/WorkInfos/KFC
-		[HttpGet("{workplace}")]
-		public async Task<ActionResult<WorkInfoDTO>> GetWorkInfo(string workplace)
+		// GET: api/WorkInfos/{id}
+		[HttpGet("{id}")]
+		public async Task<ActionResult<WorkInfoDTO>> GetWorkInfo(string id)
 		{
-			workplace = Uri.UnescapeDataString(workplace.Trim());
-			if (string.IsNullOrEmpty(workplace))
+			if (string.IsNullOrWhiteSpace(id))
 			{
-				return BadRequest("Workplace cannot be empty.");
+				return BadRequest("Id cannot be empty.");
 			}
 
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			if (string.IsNullOrEmpty(userId))
 			{
 				return Unauthorized("User ID is missing.");
-			}
-
-			string id;
-			try
-			{
-				id = WorkInfo.CreateId(workplace);
-			}
-			catch (ArgumentException ex)
-			{
-				return BadRequest(ex.Message);
 			}
 
 			// https://learn.microsoft.com/en-us/azure/cosmos-db/optimize-cost-reads-writes
@@ -114,9 +103,9 @@ namespace ShiftPay_Backend.Controllers
 					return BadRequest(ex.Message);
 				}
 
-				_context.WorkInfos.Add(workInfo);
+			_context.WorkInfos.Add(workInfo);
 				await _context.SaveChangesAsync();
-				return CreatedAtAction(nameof(GetWorkInfo), new { workplace = workInfo.Workplace }, workInfo.ToDTO());
+				return CreatedAtAction(nameof(GetWorkInfo), new { id = workInfo.Id }, workInfo.ToDTO());
 			}
 
 			workInfo.PayRates = workInfo.PayRates.Union(workInfoDto.PayRates).ToHashSet().ToList();
@@ -135,30 +124,19 @@ namespace ShiftPay_Backend.Controllers
 			return Ok(workInfo.ToDTO());
 		}
 
-		// DELETE: api/WorkInfos/KFC
-		[HttpDelete("{workplace}")]
-		public async Task<IActionResult> DeleteWorkInfo(string workplace, decimal? payRate)
+		// DELETE: api/WorkInfos/{id}
+		[HttpDelete("{id}")]
+		public async Task<IActionResult> DeleteWorkInfo(string id, decimal? payRate)
 		{
-			workplace = Uri.UnescapeDataString(workplace.Trim());
-			if (string.IsNullOrEmpty(workplace))
+			if (string.IsNullOrWhiteSpace(id))
 			{
-				return BadRequest("Workplace cannot be empty.");
+				return BadRequest("Id cannot be empty.");
 			}
 
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 			if (string.IsNullOrEmpty(userId))
 			{
 				return Unauthorized("User ID is missing.");
-			}
-
-			string id;
-			try
-			{
-				id = WorkInfo.CreateId(workplace);
-			}
-			catch (ArgumentException ex)
-			{
-				return BadRequest(ex.Message);
 			}
 
 			// Cosmos point-read: (id, partitionKey)
