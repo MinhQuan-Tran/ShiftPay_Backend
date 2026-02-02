@@ -1,4 +1,4 @@
-﻿# ShiftPay Backend API Design
+# ShiftPay Backend API Design
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@
 
 ## Overview
 
-**Base URL:** `https://<host>/api`
+**Base URL:** `https://<host>`
 
 ShiftPay Backend is a RESTful API for managing work shifts, shift templates, and workplace information. All data is scoped to the authenticated user and stored in Azure Cosmos DB.
 
@@ -125,7 +125,7 @@ Represents workplace metadata with associated pay rates.
 
 ## API Endpoints
 
-### Shifts (`/Shifts`)
+### Shifts (`/api/Shifts`)
 
 Manage work shift records.
 
@@ -134,7 +134,7 @@ Manage work shift records.
 #### List Shifts
 
 ```http
-GET /Shifts
+GET /api/Shifts
 ```
 
 Retrieves shifts with optional filtering.
@@ -152,9 +152,9 @@ Retrieves shifts with optional filtering.
 
 **Example:**
 ```http
-GET /Shifts?year=2024&month=1&day=15
-GET /Shifts?startTime=2024-01-01T00:00:00&endTime=2024-01-31T23:59:59
-GET /Shifts?id=abc123&id=def456
+GET /api/Shifts?year=2024&month=1&day=15
+GET /api/Shifts?startTime=2024-01-01T00:00:00&endTime=2024-01-31T23:59:59
+GET /api/Shifts?id=abc123&id=def456
 ```
 
 **Response:**
@@ -173,7 +173,7 @@ Content-Type: application/json
 #### Get Shift
 
 ```http
-GET /Shifts/{id}
+GET /api/Shifts/{id}
 ```
 
 Retrieves a single shift by ID.
@@ -190,7 +190,7 @@ Retrieves a single shift by ID.
 #### Create Shift
 
 ```http
-POST /Shifts
+POST /api/Shifts
 Content-Type: application/json
 
 {
@@ -215,7 +215,7 @@ Content-Type: application/json
 #### Create Shifts (Batch)
 
 ```http
-POST /Shifts/batch
+POST /api/Shifts/batch
 Content-Type: application/json
 
 [
@@ -239,7 +239,7 @@ Creates multiple shifts in a single request.
 #### Update Shift
 
 ```http
-PUT /Shifts/{id}
+PUT /api/Shifts/{id}
 Content-Type: application/json
 
 {
@@ -269,7 +269,7 @@ Content-Type: application/json
 #### Delete Shift
 
 ```http
-DELETE /Shifts/{id}
+DELETE /api/Shifts/{id}
 ```
 
 Deletes a single shift by ID.
@@ -286,7 +286,7 @@ Deletes a single shift by ID.
 #### Delete Shifts (Bulk)
 
 ```http
-DELETE /Shifts
+DELETE /api/Shifts
 ```
 
 Deletes multiple shifts matching the filter criteria.
@@ -295,8 +295,8 @@ Deletes multiple shifts matching the filter criteria.
 
 **Example:**
 ```http
-DELETE /Shifts?year=2024&month=1
-DELETE /Shifts?id=abc123&id=def456
+DELETE /api/Shifts?year=2024&month=1
+DELETE /api/Shifts?id=abc123&id=def456
 ```
 
 **Response:**
@@ -308,7 +308,7 @@ DELETE /Shifts?id=abc123&id=def456
 
 ---
 
-### Shift Templates (`/ShiftTemplates`)
+### Shift Templates (`/api/ShiftTemplates`)
 
 Manage reusable shift templates.
 
@@ -317,7 +317,7 @@ Manage reusable shift templates.
 #### List Shift Templates
 
 ```http
-GET /ShiftTemplates
+GET /api/ShiftTemplates
 ```
 
 Retrieves all shift templates for the authenticated user.
@@ -338,7 +338,7 @@ Content-Type: application/json
 #### Get Shift Template
 
 ```http
-GET /ShiftTemplates/{id}
+GET /api/ShiftTemplates/{id}
 ```
 
 **Response:**
@@ -354,7 +354,7 @@ GET /ShiftTemplates/{id}
 #### Create or Update Shift Template
 
 ```http
-POST /ShiftTemplates
+POST /api/ShiftTemplates
 Content-Type: application/json
 
 {
@@ -385,7 +385,7 @@ Content-Type: application/json
 #### Delete Shift Template
 
 ```http
-DELETE /ShiftTemplates/{id}
+DELETE /api/ShiftTemplates/{id}
 ```
 
 **Response:**
@@ -398,7 +398,7 @@ DELETE /ShiftTemplates/{id}
 
 ---
 
-### Work Infos (`/WorkInfos`)
+### Work Infos (`/api/WorkInfos`)
 
 Manage workplace information and associated pay rates.
 
@@ -407,7 +407,7 @@ Manage workplace information and associated pay rates.
 #### List Work Infos
 
 ```http
-GET /WorkInfos
+GET /api/WorkInfos
 ```
 
 Retrieves all work info records for the authenticated user.
@@ -428,7 +428,7 @@ Content-Type: application/json
 #### Get Work Info
 
 ```http
-GET /WorkInfos/{id}
+GET /api/WorkInfos/{id}
 ```
 
 **Response:**
@@ -444,7 +444,7 @@ GET /WorkInfos/{id}
 #### Create or Update Work Info
 
 ```http
-POST /WorkInfos
+POST /api/WorkInfos
 Content-Type: application/json
 
 {
@@ -472,8 +472,8 @@ Content-Type: application/json
 #### Delete Work Info or Pay Rate
 
 ```http
-DELETE /WorkInfos/{id}
-DELETE /WorkInfos/{id}?payRate=25.50
+DELETE /api/WorkInfos/{id}
+DELETE /api/WorkInfos/{id}?payRate=25.50
 ```
 
 **Behavior:**
