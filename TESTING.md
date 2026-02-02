@@ -1,4 +1,4 @@
-﻿# ShiftPay Backend Testing Documentation
+# ShiftPay Backend Testing Documentation
 
 ## Table of Contents
 
