@@ -1,4 +1,4 @@
-﻿# ShiftPay Backend API Design
+# ShiftPay Backend API Design
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@
 
 ## Overview
 
-**Base URL:** `https://<host>/api`
+**Base URL:** `https://<host>`
 
 ShiftPay Backend is a RESTful API for managing work shifts, shift templates, and workplace information. All data is scoped to the authenticated user and stored in Azure Cosmos DB.
 
