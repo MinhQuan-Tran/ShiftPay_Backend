@@ -116,10 +116,13 @@ public class ShiftTemplatesControllerTests
 			EndTime = new DateTime(2024, 1, 1, 17, 0, 0, DateTimeKind.Utc),
 			UnpaidBreaks = [TimeSpan.FromHours(1)]
 		};
-		await controller.PostShiftTemplate(templateDto);
+		var createResult = await controller.PostShiftTemplate(templateDto);
+		var createdResult = Assert.IsType<CreatedAtActionResult>(createResult.Result);
+		var createdTemplate = Assert.IsType<ShiftTemplateDTO>(createdResult.Value);
+		Assert.NotNull(createdTemplate.Id);
 
 		// Act
-		var result = await controller.GetShiftTemplate("Day Shift");
+		var result = await controller.GetShiftTemplate(createdTemplate.Id.Value);
 
 		// Assert
 		var okResult = Assert.IsType<OkObjectResult>(result.Result);
@@ -137,14 +140,14 @@ public class ShiftTemplatesControllerTests
 		var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
 
 		// Act
-		var result = await controller.GetShiftTemplate("NonExistent Template");
+		var result = await controller.GetShiftTemplate(Guid.NewGuid());
 
 		// Assert
 		Assert.IsType<NotFoundObjectResult>(result.Result);
 	}
 
 	[Fact]
-	public async Task GetShiftTemplate_WithEncodedTemplateName_ReturnsTemplate()
+	public async Task GetShiftTemplate_WithSpecialCharacterTemplateName_ReturnsTemplate()
 	{
 		// Arrange
 		await using var context = _fixture.CreateContext();
@@ -159,45 +162,18 @@ public class ShiftTemplatesControllerTests
 			EndTime = new DateTime(2024, 1, 1, 18, 0, 0, DateTimeKind.Utc),
 			UnpaidBreaks = []
 		};
-		await controller.PostShiftTemplate(templateDto);
+		var createResult = await controller.PostShiftTemplate(templateDto);
+		var createdResult = Assert.IsType<CreatedAtActionResult>(createResult.Result);
+		var createdTemplate = Assert.IsType<ShiftTemplateDTO>(createdResult.Value);
+		Assert.NotNull(createdTemplate.Id);
 
-		// Act - URL encoded template name (& encoded as %26)
-		var result = await controller.GetShiftTemplate("Weekend%20Special%20%26%20Holiday");
+		// Act
+		var result = await controller.GetShiftTemplate(createdTemplate.Id.Value);
 
 		// Assert
 		var okResult = Assert.IsType<OkObjectResult>(result.Result);
 		var retrievedTemplate = Assert.IsType<ShiftTemplateDTO>(okResult.Value);
 		Assert.Equal("Weekend Special & Holiday", retrievedTemplate.TemplateName);
-	}
-
-	[Fact]
-	public async Task GetShiftTemplate_WithPipeAndSlashCharacters_ReturnsTemplate()
-	{
-		// Arrange - Test special characters: | (pipe) and / (forward slash)
-		// These are particularly tricky since / is normally a URL path separator
-		// Real example: "McDonald | O/N" encoded as "McDonald%20%7C%20O%2FN"
-		await using var context = _fixture.CreateContext();
-		var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
-
-		var templateDto = new ShiftTemplateDTO
-		{
-			TemplateName = "McDonald | O/N",
-			Workplace = "Fast Food",
-			PayRate = 22.00m,
-			StartTime = new DateTime(2024, 1, 1, 22, 0, 0, DateTimeKind.Utc),
-			EndTime = new DateTime(2024, 1, 2, 6, 0, 0, DateTimeKind.Utc),
-			UnpaidBreaks = [TimeSpan.FromMinutes(30)]
-		};
-		await controller.PostShiftTemplate(templateDto);
-
-		// Act - URL encoded: space=%20, |=%7C, /=%2F
-		var result = await controller.GetShiftTemplate("McDonald%20%7C%20O%2FN");
-
-		// Assert
-		var okResult = Assert.IsType<OkObjectResult>(result.Result);
-		var retrievedTemplate = Assert.IsType<ShiftTemplateDTO>(okResult.Value);
-		Assert.Equal("McDonald | O/N", retrievedTemplate.TemplateName);
-		Assert.Equal("Fast Food", retrievedTemplate.Workplace);
 	}
 
 	[Fact]
@@ -216,16 +192,19 @@ public class ShiftTemplatesControllerTests
 			EndTime = new DateTime(2024, 1, 1, 16, 0, 0, DateTimeKind.Utc),
 			UnpaidBreaks = []
 		};
-		await controller.PostShiftTemplate(templateDto);
+		var createResult = await controller.PostShiftTemplate(templateDto);
+		var createdResult = Assert.IsType<CreatedAtActionResult>(createResult.Result);
+		var createdTemplate = Assert.IsType<ShiftTemplateDTO>(createdResult.Value);
+		Assert.NotNull(createdTemplate.Id);
 
 		// Act
-		var result = await controller.DeleteShiftTemplate("Template To Delete");
+		var result = await controller.DeleteShiftTemplate(createdTemplate.Id.Value);
 
 		// Assert
 		Assert.IsType<NoContentResult>(result);
 
 		// Verify deleted
-		var getResult = await controller.GetShiftTemplate("Template To Delete");
+		var getResult = await controller.GetShiftTemplate(createdTemplate.Id.Value);
 		Assert.IsType<NotFoundObjectResult>(getResult.Result);
 	}
 
@@ -237,7 +216,7 @@ public class ShiftTemplatesControllerTests
 		var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
 
 		// Act
-		var result = await controller.DeleteShiftTemplate("NonExistent Template");
+		var result = await controller.DeleteShiftTemplate(Guid.NewGuid());
 
 		// Assert
 		Assert.IsType<NotFoundObjectResult>(result);
@@ -391,7 +370,7 @@ public class ShiftTemplatesControllerTests
 		var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
 
 		// Act
-		var result = await controller.GetShiftTemplate("   ");
+		var result = await controller.GetShiftTemplate(Guid.Empty);
 
 		// Assert
 		Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -405,7 +384,7 @@ public class ShiftTemplatesControllerTests
 		var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
 
 		// Act
-		var result = await controller.DeleteShiftTemplate("   ");
+		var result = await controller.DeleteShiftTemplate(Guid.Empty);
 
 		// Assert
 		Assert.IsType<BadRequestObjectResult>(result);
@@ -591,12 +570,16 @@ public class ShiftTemplatesControllerTests
 		var result2 = await controller2.PostShiftTemplate(templateDto);
 
 		// Assert - Both should succeed since they're in different partitions (users)
-		Assert.IsType<CreatedAtActionResult>(result1.Result);
-		Assert.IsType<CreatedAtActionResult>(result2.Result);
+		var createdResult1 = Assert.IsType<CreatedAtActionResult>(result1.Result);
+		var createdResult2 = Assert.IsType<CreatedAtActionResult>(result2.Result);
+		var createdTemplate1 = Assert.IsType<ShiftTemplateDTO>(createdResult1.Value);
+		var createdTemplate2 = Assert.IsType<ShiftTemplateDTO>(createdResult2.Value);
+		Assert.NotNull(createdTemplate1.Id);
+		Assert.NotNull(createdTemplate2.Id);
 
 		// Verify both templates exist separately
-		var getResult1 = await controller1.GetShiftTemplate("Shared Template Name");
-		var getResult2 = await controller2.GetShiftTemplate("Shared Template Name");
+		var getResult1 = await controller1.GetShiftTemplate(createdTemplate1.Id.Value);
+		var getResult2 = await controller2.GetShiftTemplate(createdTemplate2.Id.Value);
 
 		Assert.IsType<OkObjectResult>(getResult1.Result);
 		Assert.IsType<OkObjectResult>(getResult2.Result);

@@ -51,7 +51,7 @@ namespace ShiftPay_Backend.Controllers
 		}
 
 		// GET: api/Shifts/abc-123
-		[HttpGet("{id}")]
+		[HttpGet("{id:guid}")]
 		public async Task<ActionResult<ShiftDTO>> GetShift(Guid id)
 		{
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -67,7 +67,7 @@ namespace ShiftPay_Backend.Controllers
 
 
 		// PUT: api/Shifts/abc-123
-		[HttpPut("{id}")]
+		[HttpPut("{id:guid}")]
 		public async Task<ActionResult<ShiftDTO>> PutShift(Guid id, ShiftDTO receivedShiftDTO)
 		{
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -296,7 +296,7 @@ namespace ShiftPay_Backend.Controllers
 		}
 
 		// DELETE: api/Shifts/5
-		[HttpDelete("{id}")]
+		[HttpDelete("{id:guid}")]
 		public async Task<IActionResult> DeleteShift(Guid id)
 		{
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

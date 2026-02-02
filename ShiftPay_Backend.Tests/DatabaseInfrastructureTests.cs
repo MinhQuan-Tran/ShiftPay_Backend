@@ -161,7 +161,7 @@ public class DatabaseInfrastructureTests
 
 		var workInfo1 = new WorkInfo
 		{
-			Id = $"workinfo-{Guid.NewGuid():N}",
+			Id = Guid.NewGuid(),
 			UserId = userId,
 			Workplace = "Duplicate Workplace",
 			PayRates = [15.00m]
@@ -169,7 +169,7 @@ public class DatabaseInfrastructureTests
 
 		var workInfo2 = new WorkInfo
 		{
-			Id = $"workinfo-{Guid.NewGuid():N}", // Different ID
+			Id = Guid.NewGuid(), // Different ID
 			UserId = userId,     // Same user (partition)
 			Workplace = "Duplicate Workplace", // Same workplace - should violate unique key
 			PayRates = [20.00m]
@@ -199,7 +199,7 @@ public class DatabaseInfrastructureTests
 
 		var workInfo1 = new WorkInfo
 		{
-			Id = $"workinfo-{Guid.NewGuid():N}",
+			Id = Guid.NewGuid(),
 			UserId = userId1,
 			Workplace = "Shared Workplace",
 			PayRates = [15.00m]
@@ -207,7 +207,7 @@ public class DatabaseInfrastructureTests
 
 		var workInfo2 = new WorkInfo
 		{
-			Id = $"workinfo-{Guid.NewGuid():N}",
+			Id = Guid.NewGuid(),
 			UserId = userId2, // Different user (different partition)
 			Workplace = "Shared Workplace", // Same workplace - OK in different partition
 			PayRates = [20.00m]
