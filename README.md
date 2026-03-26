@@ -66,14 +66,6 @@ All endpoints are scoped to the current signed-in user.
 
 The development configuration already includes a Cosmos DB emulator connection string in `ShiftPay_Backend/appsettings.Development.json`.
 
-### Local auth option
-
-For local testing without signing in through Azure AD B2C, set the following environment variable before starting the API:
-
-```bash
-Authentication__UseFake=true
-```
-
 ## Related repositories
 
 - [ShiftPay Frontend](https://github.com/MinhQuan-Tran/ShiftPay_Frontend)
