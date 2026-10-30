@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ShiftPay_Backend.Data;
@@ -66,16 +66,22 @@ namespace ShiftPay_Backend.Controllers
 			return Ok(workInfo.ToDTO());
 		}
 
-		// No PUT
-
-		// POST: api/WorkInfos
+		// POST adds data for import/sync. PUT applies explicit edits and removals.
 		[HttpPost]
-		public async Task<ActionResult<WorkInfoDTO>> PostWorkInfo(WorkInfoDTO workInfoDto)
+		public async Task<ActionResult<WorkInfoDTO>> PostWorkInfo(WorkInfoDTO? workInfoDto)
 		{
 			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-			if (string.IsNullOrEmpty(userId))
+			if (string.IsNullOrEmpty(userId)) return Unauthorized("User ID is missing.");
+			if (workInfoDto == null) return BadRequest("Work info is required.");
+
+			WorkInfo incoming;
+			try
 			{
-				return Unauthorized("User ID is missing.");
+				incoming = WorkInfo.FromDTO(workInfoDto, userId);
+			}
+			catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+			{
+				return BadRequest(ex.Message);
 			}
 
 			WorkInfo? workInfo = null;
@@ -84,41 +90,62 @@ namespace ShiftPay_Backend.Controllers
 				workInfo = await _context.WorkInfos.FindAsync(workInfoDto.Id.Value, userId);
 			}
 
-			if (workInfo == null)
+			// Offline records may have a different ID from this user's stored workplace.
+			workInfo ??= await _context.WorkInfos.WithPartitionKey(userId)
+				.FirstOrDefaultAsync(item => item.Workplace == incoming.Workplace);
+			var isNew = workInfo == null;
+			if (isNew)
+			{
+				workInfo = incoming;
+				_context.WorkInfos.Add(workInfo);
+			}
+			else
 			{
 				try
 				{
-					workInfo = WorkInfo.FromDTO(workInfoDto, userId);
+					workInfo!.MergeFrom(workInfoDto);
 				}
 				catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
 				{
 					return BadRequest(ex.Message);
 				}
-
-				_context.WorkInfos.Add(workInfo);
-				try
-				{
-					await _context.SaveChangesAsync();
-				}
-				catch (DbUpdateException ex)
-				{
-					_logger.LogWarning(ex, "Failed to create work info for user {UserId}", userId);
-					return Conflict("Failed to create work info.");
-				}
-				return CreatedAtAction(nameof(GetWorkInfo), new { id = workInfo.Id }, workInfo.ToDTO());
 			}
-
-			workInfo.Workplace = workInfoDto.Workplace;
-			workInfo.PayRates = (workInfo.PayRates ?? [])
-				.Union(workInfoDto.PayRates ?? [])
-				.ToHashSet()
-				.ToList();
 
 			try
 			{
-				workInfo.Validate();
+				await _context.SaveChangesAsync();
 			}
-			catch (InvalidOperationException ex)
+			catch (DbUpdateException ex)
+			{
+				_logger.LogWarning(ex, "Failed to save work info for user {UserId}", userId);
+				return Conflict("Failed to save work info.");
+			}
+
+			return isNew
+				? CreatedAtAction(nameof(GetWorkInfo), new { id = workInfo!.Id }, workInfo.ToDTO())
+				: Ok(workInfo!.ToDTO());
+		}
+
+		[HttpPut("{id:guid}")]
+		public async Task<ActionResult<WorkInfoDTO>> PutWorkInfo(Guid id, WorkInfoDTO? workInfoDto)
+		{
+			if (id == Guid.Empty) return BadRequest("Id cannot be empty.");
+			var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+			if (string.IsNullOrEmpty(userId)) return Unauthorized("User ID is missing.");
+			if (workInfoDto == null) return BadRequest("Work info is required.");
+			if (workInfoDto.Id.HasValue && workInfoDto.Id != id)
+			{
+				return BadRequest("Route id and payload id do not match.");
+			}
+
+			var workInfo = await _context.WorkInfos.FindAsync(id, userId);
+			if (workInfo == null) return NotFound();
+
+			try
+			{
+				workInfo.ReplaceProfiles(workInfoDto);
+			}
+			catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
 			{
 				return BadRequest(ex.Message);
 			}
@@ -129,7 +156,7 @@ namespace ShiftPay_Backend.Controllers
 			}
 			catch (DbUpdateException ex)
 			{
-				_logger.LogWarning(ex, "Failed to update work info {WorkInfoId} for user {UserId}", workInfo.Id, userId);
+				_logger.LogWarning(ex, "Failed to update work info {WorkInfoId} for user {UserId}", id, userId);
 				return Conflict("Failed to update work info.");
 			}
 
@@ -161,12 +188,7 @@ namespace ShiftPay_Backend.Controllers
 					return NotFound();
 				}
 
-				if (workInfo.PayRates.Contains(payRate.Value))
-				{
-					workInfo.PayRates.Remove(payRate.Value);
-				}
-
-				// If not found, do nothing
+				workInfo.RemoveLegacyPayRate(payRate.Value);
 			}
 			else
 			{

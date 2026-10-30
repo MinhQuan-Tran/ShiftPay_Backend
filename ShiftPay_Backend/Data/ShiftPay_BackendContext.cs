@@ -22,7 +22,13 @@ namespace ShiftPay_Backend.Data
 
 			modelBuilder.Entity<WorkInfo>()
 				.ToContainer("WorkInfos")
-				.HasPartitionKey(e => e.UserId);
+				.HasPartitionKey(e => e.UserId)
+				.OwnsMany(e => e.Profiles, profiles =>
+				{
+					profiles.Property(profile => profile.Id).ValueGeneratedNever();
+					profiles.OwnsMany(profile => profile.PayRates, rates =>
+						rates.Property(rate => rate.Id).ValueGeneratedNever());
+				});
 
 			modelBuilder.Entity<ShiftTemplate>()
 				.ToContainer("ShiftTemplates")

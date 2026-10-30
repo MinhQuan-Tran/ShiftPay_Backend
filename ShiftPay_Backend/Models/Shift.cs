@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using System.Text.Json.Serialization;
 
 namespace ShiftPay_Backend.Models
@@ -33,6 +33,13 @@ namespace ShiftPay_Backend.Models
 		}
 
 		public required decimal PayRate { get; set; }
+
+		// Snapshots remain meaningful if a workplace profile or rate is later changed.
+		public string? WorkProfileId { get; set; }
+		public string? PayRateId { get; set; }
+		public string? Position { get; set; }
+		public string? Location { get; set; }
+		public string? PayRateName { get; set; }
 
 		private DateTime _startTime;
 		public required DateTime StartTime
@@ -118,6 +125,11 @@ namespace ShiftPay_Backend.Models
 				Id = Id,
 				Workplace = Workplace,
 				PayRate = PayRate,
+				WorkProfileId = WorkProfileId,
+				PayRateId = PayRateId,
+				Position = Position,
+				Location = Location,
+				PayRateName = PayRateName,
 				StartTime = StartTime,
 				EndTime = EndTime,
 				UnpaidBreaks = UnpaidBreaks ?? new List<TimeSpan>()
@@ -132,6 +144,11 @@ namespace ShiftPay_Backend.Models
 				UserId = userId,
 				Workplace = dto.Workplace,
 				PayRate = dto.PayRate,
+				WorkProfileId = dto.WorkProfileId,
+				PayRateId = dto.PayRateId,
+				Position = dto.Position,
+				Location = dto.Location,
+				PayRateName = dto.PayRateName,
 				StartTime = dto.StartTime,
 				EndTime = dto.EndTime,
 				UnpaidBreaks = dto.UnpaidBreaks ?? new List<TimeSpan>()
@@ -150,6 +167,13 @@ namespace ShiftPay_Backend.Models
 		public required string Workplace { get; set => field = value.Trim(); }
 
 		public required decimal PayRate { get; set; }
+
+		// Snapshots remain meaningful if a workplace profile or rate is later changed.
+		public string? WorkProfileId { get; set; }
+		public string? PayRateId { get; set; }
+		public string? Position { get; set; }
+		public string? Location { get; set; }
+		public string? PayRateName { get; set; }
 
 		public required DateTime StartTime { get; set; }
 

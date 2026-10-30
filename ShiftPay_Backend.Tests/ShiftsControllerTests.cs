@@ -18,6 +18,56 @@ public class ShiftsControllerTests
 	}
 
 	[Fact]
+	public async Task PutShift_RescheduledToAnotherPartition_PersistsSelectedWorkSnapshots()
+	{
+		Guid id;
+		var profileId = Guid.NewGuid().ToString();
+		var rateId = Guid.NewGuid().ToString();
+		await using (var context = _fixture.CreateContext())
+		{
+			var controller = ControllerTestHelper.CreateShiftsController(context, _testUserId);
+			var created = await controller.PostShift(new ShiftDTO
+			{
+				Workplace = "Hospital",
+				PayRate = 30m,
+				WorkProfileId = Guid.NewGuid().ToString(),
+				PayRateId = Guid.NewGuid().ToString(),
+				Position = "Assistant",
+				Location = "West campus",
+				PayRateName = "Standard",
+				StartTime = new DateTime(2026, 10, 30, 9, 0, 0, DateTimeKind.Utc),
+				EndTime = new DateTime(2026, 10, 30, 17, 0, 0, DateTimeKind.Utc),
+				UnpaidBreaks = []
+			});
+			var shift = Assert.IsType<ShiftDTO>(Assert.IsType<CreatedAtActionResult>(created.Result).Value);
+			id = shift.Id!.Value;
+			shift.StartTime = new DateTime(2026, 11, 1, 9, 0, 0, DateTimeKind.Utc);
+			shift.EndTime = new DateTime(2026, 11, 1, 17, 0, 0, DateTimeKind.Utc);
+			shift.PayRate = 35m;
+			shift.WorkProfileId = profileId;
+			shift.PayRateId = rateId;
+			shift.Position = "Nurse";
+			shift.Location = "City campus";
+			shift.PayRateName = "Weekend";
+
+			Assert.IsType<OkObjectResult>((await controller.PutShift(id, shift)).Result);
+		}
+
+		await using var readContext = _fixture.CreateContext();
+		var reader = ControllerTestHelper.CreateShiftsController(readContext, _testUserId);
+		var saved = Assert.IsType<ShiftDTO>(Assert.IsType<OkObjectResult>((await reader.GetShift(id)).Result).Value);
+		Assert.Equal(new DateTime(2026, 11, 1, 9, 0, 0, DateTimeKind.Utc), saved.StartTime);
+		Assert.Equal(35m, saved.PayRate);
+		Assert.Equal(profileId, saved.WorkProfileId);
+		Assert.Equal(rateId, saved.PayRateId);
+		Assert.Equal("Nurse", saved.Position);
+		Assert.Equal("City campus", saved.Location);
+		Assert.Equal("Weekend", saved.PayRateName);
+		var oldDate = await reader.GetShifts(2026, 10, 30, null, null, null);
+		Assert.Empty(Assert.IsAssignableFrom<IEnumerable<ShiftDTO>>(Assert.IsType<OkObjectResult>(oldDate.Result).Value));
+	}
+
+	[Fact]
 	public async Task GetShifts_WhenNoShiftsExist_ReturnsEmptyList()
 	{
 		// Arrange

@@ -18,6 +18,52 @@ public class ShiftTemplatesControllerTests
 	}
 
 	[Fact]
+	public async Task PostShiftTemplate_SameNameUpdate_ReplacesAndClearsOptionalWorkSnapshots()
+	{
+		Guid id;
+		var profileId = Guid.NewGuid().ToString();
+		await using (var context = _fixture.CreateContext())
+		{
+			var controller = ControllerTestHelper.CreateShiftTemplatesController(context, _testUserId);
+			var created = await controller.PostShiftTemplate(new ShiftTemplateDTO
+			{
+				TemplateName = "Weekend hospital",
+				Workplace = "Hospital",
+				PayRate = 30m,
+				WorkProfileId = Guid.NewGuid().ToString(),
+				PayRateId = Guid.NewGuid().ToString(),
+				Position = "Assistant",
+				Location = "West campus",
+				PayRateName = "Standard",
+				StartTime = new DateTime(2026, 10, 30, 9, 0, 0, DateTimeKind.Utc),
+				EndTime = new DateTime(2026, 10, 30, 17, 0, 0, DateTimeKind.Utc),
+				UnpaidBreaks = []
+			});
+			var template = Assert.IsType<ShiftTemplateDTO>(Assert.IsType<CreatedAtActionResult>(created.Result).Value);
+			id = template.Id!.Value;
+			template.PayRate = 35m;
+			template.WorkProfileId = profileId;
+			template.PayRateId = null;
+			template.Position = null;
+			template.Location = "City campus";
+			template.PayRateName = "Weekend";
+
+			var updated = Assert.IsType<ShiftTemplateDTO>(Assert.IsType<OkObjectResult>((await controller.PostShiftTemplate(template)).Result).Value);
+			Assert.Equal(id, updated.Id);
+		}
+
+		await using var readContext = _fixture.CreateContext();
+		var reader = ControllerTestHelper.CreateShiftTemplatesController(readContext, _testUserId);
+		var saved = Assert.IsType<ShiftTemplateDTO>(Assert.IsType<OkObjectResult>((await reader.GetShiftTemplate(id)).Result).Value);
+		Assert.Equal(35m, saved.PayRate);
+		Assert.Equal(profileId, saved.WorkProfileId);
+		Assert.Null(saved.PayRateId);
+		Assert.Null(saved.Position);
+		Assert.Equal("City campus", saved.Location);
+		Assert.Equal("Weekend", saved.PayRateName);
+	}
+
+	[Fact]
 	public async Task GetShiftTemplates_WhenNoTemplatesExist_ReturnsEmptyList()
 	{
 		// Arrange
