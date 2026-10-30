@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ShiftPay_Backend.Data;
@@ -86,6 +86,11 @@ namespace ShiftPay_Backend.Controllers
 			{
 				existingTemplate.Workplace = receivedTemplate.Workplace;
 				existingTemplate.PayRate = receivedTemplate.PayRate;
+				existingTemplate.WorkProfileId = receivedTemplate.WorkProfileId;
+				existingTemplate.PayRateId = receivedTemplate.PayRateId;
+				existingTemplate.Position = receivedTemplate.Position;
+				existingTemplate.Location = receivedTemplate.Location;
+				existingTemplate.PayRateName = receivedTemplate.PayRateName;
 				existingTemplate.StartTime = receivedTemplate.StartTime;
 				existingTemplate.EndTime = receivedTemplate.EndTime;
 				existingTemplate.UnpaidBreaks = receivedTemplate.UnpaidBreaks;

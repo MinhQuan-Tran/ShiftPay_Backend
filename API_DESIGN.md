@@ -101,25 +101,60 @@ Represents a reusable shift template.
 | `endTime` | `datetime` | Yes | Template end time |
 | `unpaidBreaks` | `TimeSpan[]` | Yes | List of unpaid break durations |
 
+Shifts and templates also accept optional `workProfileId`, `payRateId`, `position`,
+`location`, and `payRateName` strings. These are snapshots of the selected work
+details. The numeric `payRate` remains authoritative for earnings; editing or
+removing workplace settings does not change existing shifts or templates.
+
 ---
 
 ### WorkInfoDTO
 
-Represents workplace metadata with associated pay rates.
+Stores one workplace per user, with position/location profiles and manually
+selected named hourly rates. Rates do not apply automatically by date or time.
 
 ```json
 {
   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "workplace": "Coffee Shop",
-  "payRates": [20.50, 22.00, 25.50]
+  "payRates": [20.50, 25.50],
+  "profiles": [
+    {
+      "id": "a73d9a78-3442-4b77-b992-9c03828d0e71",
+      "position": "Barista",
+      "location": "City branch",
+      "payRates": [
+        { "id": "34814cf4-c05d-41c3-bce1-ec4bb0c76643", "name": "Weekday", "hourlyRate": 20.50 },
+        { "id": "1a99dce2-b7e5-4b6a-b1f3-53e6091dacdf", "name": "Weekend", "hourlyRate": 25.50 }
+      ]
+    }
+  ]
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | `guid?` | No | Auto-generated on create |
-| `workplace` | `string` | Yes | Unique workplace name per user (trimmed) |
-| `payRates` | `decimal[]` | No | List of pay rates for this workplace (≥ 0) |
+| `workplace` | `string` | Yes | Unique workplace name per user (trimmed), immutable after creation |
+| `payRates` | `decimal[]` | No | Legacy input; responses contain the distinct amounts projected from profiles |
+| `profiles` | `object[]` | For PUT | Complete position/location profiles, including their rate choices |
+
+Profile IDs and rate IDs must be non-empty strings of at most 100 characters,
+unique within their respective lists. Clients generate UUIDs for new entries.
+Position and location are optional trimmed strings, each at most 200 characters.
+Each profile must include a `payRates` list (which may be empty). Each rate needs
+a name of at most 100 characters and a non-negative decimal `hourlyRate`.
+
+Old numeric-only documents are returned as a profile with ID `legacy`, with
+rate IDs such as `legacy-25.5` (invariant decimal form without trailing zeros).
+These rates retain an empty name rather than inventing a category. Only rates
+with reserved normalized `legacy-*` IDs may have an empty name. A custom numeric
+rate can use that identity in any profile. Explicit `profiles: []` remains empty;
+the old numeric projection is never used to restore removed choices.
+
+When `profiles` is present, it is authoritative and `payRates` is only a
+compatibility projection. Null list entries, null rate lists, duplicate IDs,
+blank names for new named rates, and negative amounts return `400 Bad Request`.
 
 ---
 
@@ -441,7 +476,7 @@ GET /api/WorkInfos/{id}
 
 ---
 
-#### Create or Update Work Info
+#### Create or Merge Work Info
 
 ```http
 POST /api/WorkInfos
@@ -455,8 +490,17 @@ Content-Type: application/json
 ```
 
 **Behavior:**
-- If `id` is provided and exists → **updates** the record (merges `payRates` with existing values).
-- Otherwise → **creates** a new record.
+- Finds the current user's record by `id`, then by trimmed `workplace`. This
+  allows offline records with different local IDs to merge into one workplace.
+- Without `profiles`, adds numeric amounts not already present in any profile
+  to the legacy choices. If a generated legacy ID belongs to an edited rate
+  with a different amount, the new choice receives a UUID and the name `Custom`.
+- With `profiles`, merges profiles and rates by their stable IDs. Existing
+  values win on collisions; missing position/location details may be filled.
+  New profiles and rates are appended. Existing profiles are never dropped.
+- Creates a record when no matching workplace exists. Changing an existing
+  record's workplace returns `400 Bad Request`.
+- Use PUT for explicit edits and removals. POST is intended for sync/import.
 
 **Response:**
 
@@ -469,6 +513,27 @@ Content-Type: application/json
 
 ---
 
+#### Replace Work Profiles
+
+```http
+PUT /api/WorkInfos/{id}
+Content-Type: application/json
+
+{
+  "workplace": "Coffee Shop",
+  "profiles": []
+}
+```
+
+Replaces all profiles/rates with the supplied list, including an empty list to
+remove every profile. Omitted/null `profiles` is rejected. Workplace remains
+immutable; optional payload `id` must match the route. Returns `200 OK` with the
+updated WorkInfoDTO, `400 Bad Request` for validation, `404 Not Found` for a
+missing record in the current user's partition, or `409 Conflict` on save failure.
+Replacing profiles does not modify any saved shift or template.
+
+---
+
 #### Delete Work Info or Pay Rate
 
 ```http
@@ -478,7 +543,9 @@ DELETE /api/WorkInfos/{id}?payRate=25.50
 
 **Behavior:**
 - Without `payRate` → Deletes the entire work info record.
-- With `payRate` → Removes only that specific pay rate from the list.
+- With `payRate` → Removes matching unnamed `legacy-*` rate choices across all
+  profiles (or numeric legacy values in an old document). Named choices with the
+  same amount are preserved. Use PUT to remove named rates by identity.
 
 **Response:**
 

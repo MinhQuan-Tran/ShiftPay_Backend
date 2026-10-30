@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Cosmos;
+using Microsoft.EntityFrameworkCore;
 using ShiftPay_Backend.Models;
 
 namespace ShiftPay_Backend.Tests;
@@ -15,6 +17,38 @@ public class WorkInfosControllerTests
 	public WorkInfosControllerTests(CosmosDbTestFixture fixture)
 	{
 		_fixture = fixture;
+	}
+
+	[Fact]
+	public async Task GetWorkInfo_FromRawLegacyDocument_PreservesRatesWithoutProfileFields()
+	{
+		var id = Guid.NewGuid();
+		await using (var writeContext = _fixture.CreateContext())
+		{
+			var container = writeContext.Database.GetCosmosClient()
+				.GetContainer(writeContext.Database.GetCosmosDatabaseId(), "WorkInfos");
+			var document = new Dictionary<string, object>
+			{
+				["id"] = id.ToString(),
+				["UserId"] = _testUserId,
+				["Workplace"] = "Legacy hospital",
+				["PayRates"] = new[] { 25.5m, 30m },
+				["$type"] = nameof(WorkInfo)
+			};
+			await container.CreateItemAsync(document, new PartitionKey(_testUserId), cancellationToken: TestContext.Current.CancellationToken);
+		}
+
+		await using var readContext = _fixture.CreateContext();
+		var controller = ControllerTestHelper.CreateWorkInfosController(readContext, _testUserId);
+		var result = await controller.GetWorkInfo(id);
+		var saved = Assert.IsType<WorkInfoDTO>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+		Assert.Equal("Legacy hospital", saved.Workplace);
+		Assert.Equal(new[] { 25.5m, 30m }, saved.PayRates);
+		var profile = Assert.Single(saved.Profiles!);
+		Assert.Equal("legacy", profile.Id);
+		Assert.Equal(new[] { "legacy-25.5", "legacy-30" }, profile.PayRates.Select(rate => rate.Id));
+		Assert.Equal(new[] { 25.5m, 30m }, profile.PayRates.Select(rate => rate.HourlyRate));
 	}
 
 	[Fact]
@@ -411,6 +445,157 @@ public class WorkInfosControllerTests
 	}
 
 	#region Unique Key Constraint Tests
+
+	[Fact]
+	public async Task PostWorkInfo_WithProfiles_PersistsDistinctNamedRatesAtSameAmount()
+	{
+		Guid id;
+		var profileId = Guid.NewGuid().ToString();
+		await using (var context = _fixture.CreateContext())
+		{
+			var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
+			var result = await controller.PostWorkInfo(new WorkInfoDTO
+			{
+				Workplace = "Profile Hospital",
+				Profiles =
+				[
+					new WorkProfile
+					{
+						Id = profileId,
+						Position = "Nurse",
+						Location = "City campus",
+						PayRates =
+						[
+							new NamedPayRate { Id = Guid.NewGuid().ToString(), Name = "Overnight", HourlyRate = 35m },
+							new NamedPayRate { Id = Guid.NewGuid().ToString(), Name = "Weekend", HourlyRate = 35m }
+						]
+					}
+				]
+			});
+			id = Assert.IsType<WorkInfoDTO>(Assert.IsType<CreatedAtActionResult>(result.Result).Value).Id!.Value;
+		}
+
+		await using var readContext = _fixture.CreateContext();
+		var readController = ControllerTestHelper.CreateWorkInfosController(readContext, _testUserId);
+		var readResult = await readController.GetWorkInfo(id);
+		var saved = Assert.IsType<WorkInfoDTO>(Assert.IsType<OkObjectResult>(readResult.Result).Value);
+		var profile = Assert.Single(saved.Profiles!);
+		Assert.Equal(profileId, profile.Id);
+		Assert.Equal("Nurse", profile.Position);
+		Assert.Equal("City campus", profile.Location);
+		Assert.Equal(2, profile.PayRates.Count);
+		Assert.Equal(new[] { 35m }, saved.PayRates);
+	}
+
+	[Fact]
+	public async Task PostWorkInfo_WithDifferentLocalId_MergesIntoExistingWorkplace()
+	{
+		await using var context = _fixture.CreateContext();
+		var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
+		var created = await controller.PostWorkInfo(new WorkInfoDTO { Workplace = "Synced workplace", PayRates = [25m] });
+		var existingId = Assert.IsType<WorkInfoDTO>(Assert.IsType<CreatedAtActionResult>(created.Result).Value).Id!.Value;
+		var profileId = Guid.NewGuid().ToString();
+
+		var merged = await controller.PostWorkInfo(new WorkInfoDTO
+		{
+			Id = Guid.NewGuid(),
+			Workplace = "Synced workplace",
+			Profiles =
+			[
+				new WorkProfile
+				{
+					Id = profileId,
+					Location = "City campus",
+					PayRates = [new NamedPayRate { Id = Guid.NewGuid().ToString(), Name = "Overnight", HourlyRate = 30m }]
+				}
+			]
+		});
+
+		var saved = Assert.IsType<WorkInfoDTO>(Assert.IsType<OkObjectResult>(merged.Result).Value);
+		Assert.Equal(existingId, saved.Id);
+		Assert.Equal(new[] { 25m, 30m }, saved.PayRates.Order());
+		Assert.Contains(saved.Profiles!, profile => profile.Id == profileId);
+		Assert.Contains(saved.Profiles!, profile => profile.Id == "legacy");
+	}
+
+	[Fact]
+	public async Task PutWorkInfo_ReplacesProfiles_AndPersistsRateRemovals()
+	{
+		Guid id;
+		var profileId = Guid.NewGuid().ToString();
+		var rateId = Guid.NewGuid().ToString();
+		await using (var context = _fixture.CreateContext())
+		{
+			var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
+			var created = await controller.PostWorkInfo(new WorkInfoDTO
+			{
+				Workplace = "Editable Hospital",
+				PayRates = [25m, 30m]
+			});
+			id = Assert.IsType<WorkInfoDTO>(Assert.IsType<CreatedAtActionResult>(created.Result).Value).Id!.Value;
+			var updated = await controller.PutWorkInfo(id, new WorkInfoDTO
+			{
+				Id = id,
+				Workplace = "Editable Hospital",
+				PayRates = [25m, 30m],
+				Profiles =
+				[
+					new WorkProfile
+					{
+						Id = profileId,
+						Position = "Nurse",
+						PayRates = [new NamedPayRate { Id = rateId, Name = "Standard", HourlyRate = 27m }]
+					}
+				]
+			});
+			Assert.IsType<OkObjectResult>(updated.Result);
+		}
+
+		await using var readContext = _fixture.CreateContext();
+		var readController = ControllerTestHelper.CreateWorkInfosController(readContext, _testUserId);
+		var result = await readController.GetWorkInfo(id);
+		var saved = Assert.IsType<WorkInfoDTO>(Assert.IsType<OkObjectResult>(result.Result).Value);
+		Assert.Equal(new[] { 27m }, saved.PayRates);
+		Assert.Equal(profileId, Assert.Single(saved.Profiles!).Id);
+		Assert.Equal(rateId, Assert.Single(saved.Profiles![0].PayRates).Id);
+	}
+
+	[Fact]
+	public async Task PutWorkInfo_CannotRenameWorkplace()
+	{
+		await using var context = _fixture.CreateContext();
+		var controller = ControllerTestHelper.CreateWorkInfosController(context, _testUserId);
+		var created = await controller.PostWorkInfo(new WorkInfoDTO { Workplace = "Original workplace", PayRates = [25m] });
+		var id = Assert.IsType<WorkInfoDTO>(Assert.IsType<CreatedAtActionResult>(created.Result).Value).Id!.Value;
+
+		var result = await controller.PutWorkInfo(id, new WorkInfoDTO { Id = id, Workplace = "Other workplace", Profiles = [] });
+
+		Assert.IsType<BadRequestObjectResult>(result.Result);
+		await using var readContext = _fixture.CreateContext();
+		var readController = ControllerTestHelper.CreateWorkInfosController(readContext, _testUserId);
+		var read = await readController.GetWorkInfo(id);
+		var saved = Assert.IsType<WorkInfoDTO>(Assert.IsType<OkObjectResult>(read.Result).Value);
+		Assert.Equal("Original workplace", saved.Workplace);
+		Assert.Equal(new[] { 25m }, saved.PayRates);
+	}
+
+	[Fact]
+	public async Task PutWorkInfo_CannotUpdateAnotherUsersWorkplace()
+	{
+		await using var ownerContext = _fixture.CreateContext();
+		var owner = ControllerTestHelper.CreateWorkInfosController(ownerContext, _testUserId);
+		var created = await owner.PostWorkInfo(new WorkInfoDTO { Workplace = "Private workplace", PayRates = [25m] });
+		var id = Assert.IsType<WorkInfoDTO>(Assert.IsType<CreatedAtActionResult>(created.Result).Value).Id!.Value;
+
+		await using var otherContext = _fixture.CreateContext();
+		var otherUser = ControllerTestHelper.CreateWorkInfosController(otherContext, $"other-{Guid.NewGuid():N}");
+		var result = await otherUser.PutWorkInfo(id, new WorkInfoDTO { Id = id, Workplace = "Private workplace", Profiles = [] });
+
+		Assert.IsType<NotFoundResult>(result.Result);
+		var original = await owner.GetWorkInfo(id);
+		var saved = Assert.IsType<WorkInfoDTO>(Assert.IsType<OkObjectResult>(original.Result).Value);
+		Assert.Equal(new[] { 25m }, saved.PayRates);
+	}
 
 	[Fact]
 	public async Task PostWorkInfo_SameWorkplaceDifferentUsers_BothSucceed()

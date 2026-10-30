@@ -1,4 +1,4 @@
-﻿namespace ShiftPay_Backend.Models
+namespace ShiftPay_Backend.Models
 {
 	public class ShiftTemplate
 	{
@@ -27,6 +27,13 @@
 		}
 
 		public required decimal PayRate { get; set; }
+
+		// Snapshots remain meaningful if a workplace profile or rate is later changed.
+		public string? WorkProfileId { get; set; }
+		public string? PayRateId { get; set; }
+		public string? Position { get; set; }
+		public string? Location { get; set; }
+		public string? PayRateName { get; set; }
 
 		private DateTime _startTime;
 		public required DateTime StartTime
@@ -107,6 +114,11 @@
 				TemplateName = this.TemplateName,
 				Workplace = this.Workplace,
 				PayRate = this.PayRate,
+				WorkProfileId = WorkProfileId,
+				PayRateId = PayRateId,
+				Position = Position,
+				Location = Location,
+				PayRateName = PayRateName,
 				StartTime = this.StartTime,
 				EndTime = this.EndTime,
 				UnpaidBreaks = this.UnpaidBreaks,
@@ -122,6 +134,11 @@
 				TemplateName = dto.TemplateName,
 				Workplace = dto.Workplace,
 				PayRate = dto.PayRate,
+				WorkProfileId = dto.WorkProfileId,
+				PayRateId = dto.PayRateId,
+				Position = dto.Position,
+				Location = dto.Location,
+				PayRateName = dto.PayRateName,
 				StartTime = dto.StartTime,
 				EndTime = dto.EndTime,
 				UnpaidBreaks = dto.UnpaidBreaks ?? new List<TimeSpan>()
@@ -142,6 +159,13 @@
 		public required string Workplace { get; set => field = value.Trim(); }
 
 		public required decimal PayRate { get; set; }
+
+		// Snapshots remain meaningful if a workplace profile or rate is later changed.
+		public string? WorkProfileId { get; set; }
+		public string? PayRateId { get; set; }
+		public string? Position { get; set; }
+		public string? Location { get; set; }
+		public string? PayRateName { get; set; }
 
 		public required DateTime StartTime { get; set; }
 

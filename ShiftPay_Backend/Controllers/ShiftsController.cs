@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -113,6 +113,11 @@ namespace ShiftPay_Backend.Controllers
 					UserId = userId,
 					Workplace = receivedShift.Workplace,
 					PayRate = receivedShift.PayRate,
+					WorkProfileId = receivedShift.WorkProfileId,
+					PayRateId = receivedShift.PayRateId,
+					Position = receivedShift.Position,
+					Location = receivedShift.Location,
+					PayRateName = receivedShift.PayRateName,
 					StartTime = receivedShift.StartTime,
 					EndTime = receivedShift.EndTime,
 					UnpaidBreaks = receivedShift.UnpaidBreaks
@@ -123,6 +128,11 @@ namespace ShiftPay_Backend.Controllers
 			{
 				existingShift.Workplace = receivedShift.Workplace;
 				existingShift.PayRate = receivedShift.PayRate;
+				existingShift.WorkProfileId = receivedShift.WorkProfileId;
+				existingShift.PayRateId = receivedShift.PayRateId;
+				existingShift.Position = receivedShift.Position;
+				existingShift.Location = receivedShift.Location;
+				existingShift.PayRateName = receivedShift.PayRateName;
 				existingShift.StartTime = receivedShift.StartTime;
 				existingShift.EndTime = receivedShift.EndTime;
 				existingShift.UnpaidBreaks = receivedShift.UnpaidBreaks;
